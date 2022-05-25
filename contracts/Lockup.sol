@@ -1,3 +1,4 @@
+pragma solidity ^0.8.0;
 
 library SafeMath {
 
@@ -88,7 +89,6 @@ library SafeMath {
         return a % b;
     }
 }
-pragma solidity ^0.8.0;
 
 library Address {
     function isContract(address account) internal view returns (bool) { 
@@ -190,14 +190,25 @@ abstract contract Ownable is Context {
 }
 
 interface IPancakeV2Factory {
-    event PairCreated(address indexed token0, address indexed token1, address pair, uint);
+       event PairCreated(address indexed token0, address indexed token1, address pair, uint);
+
+    function feeTo() external view returns (address);
+    function feeToSetter() external view returns (address);
+
+    function getPair(address tokenA, address tokenB) external view returns (address pair);
+    function allPairs(uint) external view returns (address pair);
+    function allPairsLength() external view returns (uint);
+
     function createPair(address tokenA, address tokenB) external returns (address pair);
+
+    function setFeeTo(address) external;
+    function setFeeToSetter(address) external;
 }
 
 interface IPancakeV2Router {
     function factory() external pure returns (address);
     function WETH() external pure returns (address);
-    
+
     function addLiquidity(
         address tokenA,
         address tokenB,
@@ -208,7 +219,6 @@ interface IPancakeV2Router {
         address to,
         uint deadline
     ) external returns (uint amountA, uint amountB, uint liquidity);
-
     function addLiquidityETH(
         address token,
         uint amountTokenDesired,
@@ -217,29 +227,76 @@ interface IPancakeV2Router {
         address to,
         uint deadline
     ) external payable returns (uint amountToken, uint amountETH, uint liquidity);
-
-    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
+    function removeLiquidity(
+        address tokenA,
+        address tokenB,
+        uint liquidity,
+        uint amountAMin,
+        uint amountBMin,
+        address to,
+        uint deadline
+    ) external returns (uint amountA, uint amountB);
+    function removeLiquidityETH(
+        address token,
+        uint liquidity,
+        uint amountTokenMin,
+        uint amountETHMin,
+        address to,
+        uint deadline
+    ) external returns (uint amountToken, uint amountETH);
+    function removeLiquidityWithPermit(
+        address tokenA,
+        address tokenB,
+        uint liquidity,
+        uint amountAMin,
+        uint amountBMin,
+        address to,
+        uint deadline,
+        bool approveMax, uint8 v, bytes32 r, bytes32 s
+    ) external returns (uint amountA, uint amountB);
+    function removeLiquidityETHWithPermit(
+        address token,
+        uint liquidity,
+        uint amountTokenMin,
+        uint amountETHMin,
+        address to,
+        uint deadline,
+        bool approveMax, uint8 v, bytes32 r, bytes32 s
+    ) external returns (uint amountToken, uint amountETH);
+    function swapExactTokensForTokens(
         uint amountIn,
         uint amountOutMin,
         address[] calldata path,
         address to,
         uint deadline
-    ) external;
-
-    function swapExactETHForTokensSupportingFeeOnTransferTokens(
-        uint amountOutMin,
+    ) external returns (uint[] memory amounts);
+    function swapTokensForExactTokens(
+        uint amountOut,
+        uint amountInMax,
         address[] calldata path,
         address to,
         uint deadline
-    ) external payable;
+    ) external returns (uint[] memory amounts);
+    function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline)
+        external
+        payable
+        returns (uint[] memory amounts);
+    function swapTokensForExactETH(uint amountOut, uint amountInMax, address[] calldata path, address to, uint deadline)
+        external
+        returns (uint[] memory amounts);
+    function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline)
+        external
+        returns (uint[] memory amounts);
+    function swapETHForExactTokens(uint amountOut, address[] calldata path, address to, uint deadline)
+        external
+        payable
+        returns (uint[] memory amounts);
 
-    function swapExactTokensForETHSupportingFeeOnTransferTokens(
-        uint amountIn,
-        uint amountOutMin,
-        address[] calldata path,
-        address to,
-        uint deadline
-    ) external;
+    function quote(uint amountA, uint reserveA, uint reserveB) external pure returns (uint amountB);
+    function getAmountOut(uint amountIn, uint reserveIn, uint reserveOut) external pure returns (uint amountOut);
+    function getAmountIn(uint amountOut, uint reserveIn, uint reserveOut) external pure returns (uint amountIn);
+    function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts);
+    function getAmountsIn(uint amountOut, address[] calldata path) external view returns (uint[] memory amounts);
 }
 
 
@@ -274,26 +331,30 @@ contract Lockup is Ownable {
     // balance of this contract should be bigger than thresholdMinimum
     uint256 public thresholdMinimum = 10 ** 11;
 
-    // default divisor is 10
-    uint8 public divisor = 10;
+    // default divisor is 6
+    uint8 public divisor = 6;
 
     uint8 public rewardClaimInterval = 12;
 
     uint256 public totalStaked;
 
-    uint8 public claimFee = 10; // the default claim fee is 10
+    uint8 public claimFee = 100; // the default claim fee is 10
 
     address treasureWallet;
+    uint256 claimFeeAmount;
+    uint256 claimFeeAmountLimit;
 
-    enum LockDuration { NoneLock, OneMonth, ThreeMonth, SixMonth, OneYear, Irreversible }
+    address deadAddress = 0x000000000000000000000000000000000000dEaD;
+    address rewardWallet;
 
-    struct UserInfo {
-        LockDuration duration;
-        uint256 amount;
-        uint8 boost;
-        uint256 stakedTime;
-        uint256 lastClaimed;
-        uint256 blockListIndex;
+    struct StakeInfo {
+        int128 duration;  // -1: irreversible, others: reversible (0, 30, 90, 180, 365 days which means lock periods)
+        uint256 amount; // staked amount
+        uint256 stakedTime; // initial staked time
+        uint256 lastClaimed; // last claimed time
+        uint256 blockListIndex; // blockList id which is used in calculating rewards
+        bool available;     // if diposit, true: if withdraw, false
+        string name;    // unique id of the stake
     }
 
     struct BlockInfo {
@@ -301,12 +362,19 @@ contract Lockup is Ownable {
         uint256 totalStaked;
     }
 
-    mapping(address => UserInfo) public stakedUserList;
-
+    mapping(bytes32 => StakeInfo) public stakedUserList;
+    mapping (address => bytes32[]) public userInfoList; // container of user's id
     BlockInfo[] public blockList;
 
     IPancakeV2Router public router;
     address public pair;
+
+    event Deposit(address indexed user, string name, uint256 amount);
+    event Withdraw(address indexed user, string name, uint256 amount);
+    event Compound(address indexed user, string name, uint256 amount);
+    event NewDeposit(address indexed user, string name, uint256 amount);
+    event SendToken(address indexed token, address indexed sender, uint256 amount);
+    event ClaimReward(address indexed user, uint256 amount);
 
     constructor (
         IERC20 _stakingToken
@@ -315,10 +383,29 @@ contract Lockup is Ownable {
         totalSupply = uint256(IERC20Metadata(address(stakingToken)).totalSupply());
         IPancakeV2Router _newPancakeRouter = IPancakeV2Router(0x10ED43C718714eb63d5aA57B78B54704E256024E);
         router = _newPancakeRouter;
+
+        // default is 10000 amount of tokens
+        claimFeeAmountLimit = 10000 * 10 ** IERC20Metadata(address(stakingToken)).decimals();
+    }
+
+    function string2byte32(string memory name) private pure returns(bytes32) {
+        return keccak256(abi.encodePacked(name));
+    }
+
+    function isExistStakeId(string memory name) public view returns (bool) {
+        return stakedUserList[string2byte32(name)].available;
     }
 
     function setRewardPoolBalance(uint256 _balance) external onlyOwner {
         rewardPoolBalance = _balance;
+    }
+
+    function setTreasuryWallet(address walletAddr) external onlyOwner {
+        treasureWallet = walletAddr;
+    }
+
+    function setClaimFeeAmountLimit(uint256 val) external onlyOwner {
+        claimFeeAmountLimit = val * 10 ** IERC20Metadata(address(stakingToken)).decimals();
     }
 
     function setDistributionPeriod(uint256 _period) external onlyOwner {
@@ -335,6 +422,7 @@ contract Lockup is Ownable {
             require(uint256(IERC20Metadata(token).balanceOf(address(this))) - amount >= thresholdMinimum, "Insufficient amount in this contract");
         }
         IERC20Metadata(address(token)).transfer(sender, amount);
+        emit SendToken(token, sender, amount);
     }
 
     function setRewardInterval (uint8 _interval) external onlyOwner {
@@ -345,12 +433,11 @@ contract Lockup is Ownable {
         claimFee = fee;
     }
 
-    function deposit(LockDuration duration, uint256 amount) public {
-        require(amount > 0, "amount should be bigger than zero!");
+    function updateBlockList(uint256 amount, bool isPush) private {
         uint256 len = blockList.length;
-        totalStaked += amount;
+        if(isPush) totalStaked = totalStaked.add(amount);
+        else       totalStaked = totalStaked.sub(amount);
 
-        // when blocList is empty
         if(len - 1 < 0) {
             blockList.push(BlockInfo({
                 blockNumber : block.number,
@@ -367,77 +454,186 @@ contract Lockup is Ownable {
                 }));
             }
         }
+    }
 
-        UserInfo storage user = stakedUserList[msg.sender];
+    function updateStakedList(string memory name, int128 duration, uint256 amount, bool available) private {
+        bytes32 key = string2byte32(name); 
+        StakeInfo storage info = stakedUserList[key];
+        info.available = available;
+        if(!available) return;
+        info.amount =info.amount.add(amount);
+        info.blockListIndex = blockList.length - 1;
+        info.stakedTime = block.timestamp;
+        info.duration = duration;
+        info.name = name;
+    }
 
-        user.amount =user.amount.add(amount);
-        user.blockListIndex = blockList.length - 1;
-        user.stakedTime = block.timestamp;
-        user.boost = getBoost(duration);
-        user.duration = duration;
-
-        if(duration == LockDuration.Irreversible) {
-            dealWithIrreversibleAmount(amount);
+    function updateUserList(string memory name, bool isPush) private {
+        bytes32 key = string2byte32(name);
+        if(isPush)
+            userInfoList[_msgSender()].push(key);
+        else {
+            // remove user id from the userList
+            for (uint256 i = 0; i < userInfoList[_msgSender()].length; i++) {
+                if (userInfoList[_msgSender()][i] == key) {
+                    userInfoList[_msgSender()][i] = userInfoList[_msgSender()][userInfoList[_msgSender()].length - 1];
+                    userInfoList[_msgSender()].pop();
+                    break;
+                }
+            }
         }
-        
     }
 
-    function getBoost(LockDuration duration) internal pure returns (uint8) {
-        if (duration == LockDuration.NoneLock) return 1;
-        else if (duration == LockDuration.OneMonth) return 2;
-        else if (duration == LockDuration.ThreeMonth) return 3;
-        else if (duration == LockDuration.SixMonth) return 4;
-        else if (duration == LockDuration.OneYear) return 5;
-        else return 10;
+    function deposit(string memory name, int128 duration, uint256 amount) public {
+        require(amount > 0, "amount should be bigger than zero!");
+        require(!isExistStakeId(name), "This id is already existed!");
+
+        updateBlockList(amount, true);
+        updateStakedList(name, duration, amount, true);
+        updateUserList(name, true);
+
+        if(duration == -1) {    //irreversible mode
+            dealWithIrreversibleAmount(amount);
+        } else {
+            stakingToken.transferFrom(_msgSender(), address(this), amount);
+        }
+        emit Deposit(_msgSender(), name, amount);
     }
 
-    function getDuration(LockDuration duration) internal pure returns (int256) {
-        if (duration == LockDuration.NoneLock) return 0;
-        else if (duration == LockDuration.OneMonth) return 30 days;
-        else if (duration == LockDuration.ThreeMonth) return 90 days;
-        else if (duration == LockDuration.SixMonth) return 180 days;
-        else if (duration == LockDuration.OneYear) return 365 days;
-        else return -1;
+    function withdraw(string memory name) public {
+        require(!isExistStakeId(name), "This id is already existed!");
+        require(isWithDrawable(name), "Lock period is not expired!");
+        _claimReward(name, false);
+        uint256 amount = stakedUserList[string2byte32(name)].amount;
+        updateBlockList(amount, false);
+        updateStakedList(name, 0, 0, false);
+        updateUserList(name, false);
+        stakingToken.transfer(_msgSender(), amount);
+        emit Withdraw(_msgSender(), name, amount);
+    }
+
+    function getBoost(int128 duration) internal pure returns (uint8) {
+        if (duration == -1) return 10;
+        else if (duration == 0) return 1;
+        else if (duration < 30) return 2;
+        else if (duration < 90) return 3;
+        else if (duration < 180) return 4;
+        else return 5;
     }
 
     function dealWithIrreversibleAmount(uint256 amount) internal {
 
     }
 
-    function withDraw() public {
-        if(!isWithDrawable()) return;
-        if(!claimReward()) return;
-        UserInfo storage user = stakedUserList[msg.sender];
-
-        uint256 len = blockList.length;
-        totalStaked = totalStaked.sub(user.amount);
-
-        if(blockList[len-1].blockNumber == block.number) { 
-            blockList[len-1].totalStaked = totalStaked;
-        } else {
-            blockList.push(BlockInfo({
-                blockNumber : block.number,
-                totalStaked : totalStaked
-            }));
-        }
-        
-    }
-
-    function isWithDrawable() public view returns(bool) {
-        UserInfo storage user = stakedUserList[msg.sender];
-        int256 duration = getDuration(user.duration);
+    function isWithDrawable(string memory name) public view returns(bool) {
+        StakeInfo storage stakeInfo = stakedUserList[string2byte32(name)];
         // when Irreversible mode
-        if (duration == -1) return false;
-        if (uint256(duration) <= block.timestamp - user.stakedTime) return true;
+        if (stakeInfo.duration == -1) return false;
+        if (uint256(uint128(stakeInfo.duration) * 1 days) <= block.timestamp - stakeInfo.stakedTime * 1 days) return true;
         else return false;
     }
 
-    function calculateReward() public view {
-
+    function _calculateReward(string memory name) private view returns(uint256) {
+        require(!isExistStakeId(name), "This id is already existed!");
+        StakeInfo storage stakeInfo = stakedUserList[string2byte32(name)];
+        uint256 blockIndex = stakeInfo.blockListIndex;
+        uint256 stakedAmount = stakeInfo.amount;
+        uint256 reward = 0;
+        uint256 boost = getBoost(stakeInfo.duration);
+        for (uint256 i = blockIndex; i < blockList.length; i++) {
+            uint256 _totalStaked = blockList[i].totalStaked;
+            reward += (rewardPoolBalance * stakedAmount * boost / distributionPeriod  / _totalStaked / divisor );
+        }
+        return reward;
     }
 
-    function claimReward() public returns(bool) {
+    function calculateReward(string memory name) public view returns(uint256) {
+        uint256 reward = _calculateReward(name);
+        return reward - reward * claimFee / 1000;
+    }
+    
+    function claimReward(string memory name) public {
+        _claimReward(name, true);
+    }
 
+    function _claimReward(string memory name, bool ignoreClaimInterval) private {
+        require(!isExistStakeId(name), "This id is already existed!");
+        if(!ignoreClaimInterval) {
+            require(!isClaimable(name), "Claim lock period is not expired!");
+        }
+        uint256 reward = _calculateReward(name);
+        bytes32 key = string2byte32(name); 
+        StakeInfo storage info = stakedUserList[key];
+        info.blockListIndex = block.number;
+        info.lastClaimed = block.timestamp;
+        stakingToken.transfer(_msgSender(), reward - reward * claimFee / 1000);
+
+        // send teasureWallet when the total amount sums up to the limit value
+        if(claimFeeAmount + reward * claimFee / 1000 > claimFeeAmountLimit) {
+            stakingToken.transfer(treasureWallet, claimFeeAmount + reward * claimFee / 1000);
+            claimFeeAmount = 0;
+        } else {
+            claimFeeAmount += reward * claimFee / 1000;
+        }
+
+        emit ClaimReward(_msgSender(), reward - reward * claimFee / 1000);
+    }
+
+    function isClaimable(string memory name) public view returns(bool) {
+        StakeInfo storage stakeInfo = stakedUserList[string2byte32(name)];
+        uint256 lastClaimed = stakeInfo.lastClaimed;
+        if(block.timestamp - lastClaimed >= rewardClaimInterval * 1 hours) return true;
+        else return false;
+    }
+
+    function compound(string memory name) public {
+        require(!isExistStakeId(name), "This id is already existed!");
+        require(!isClaimable(name), "Claim lock period is not expired!");
+        uint256 reward = _calculateReward(name);
+        updateBlockList(reward, true);
+        bytes32 key = string2byte32(name);
+        StakeInfo storage info = stakedUserList[key];
+        info.blockListIndex = block.number;
+        info.lastClaimed = block.timestamp;
+        info.amount += reward;
+        info.duration++;
+
+        emit Compound(_msgSender(), name, reward);
+    }
+
+    function newDeposit(string memory name, int128 duration) public {
+        require(!isExistStakeId(name), "This id is already existed!");
+        require(!isClaimable(name), "Claim lock period is not expired!");
+        uint256 reward = _calculateReward(name);
+        updateBlockList(reward, true);
+        updateStakedList(name, duration, reward, true);
+        updateUserList(name, true);
+
+        emit NewDeposit(_msgSender(), name, reward);
+    }
+
+    function getUserStakedInfo() public view returns (uint256, string[] memory) {
+        bytes32[] memory userInfo = userInfoList[_msgSender()];
+        uint256 len = userInfo.length;
+        string[] memory resVal = new string[](len);
+        for (uint256 i = 0; i < userInfo.length; i++) {
+            StakeInfo memory info = stakedUserList[userInfo[i]];
+            resVal[i] = info.name;
+        }
+
+        return (len, resVal);
+    }
+
+    function claimMulti(string[] memory ids) public {
+        for (uint256 i = 0; i < ids.length; i++) {
+            claimReward(ids[i]);
+        }
+    }
+
+    function newCompound(string[] memory ids) public {
+        for (uint256 i = 0; i < ids.length; i++) {
+            compound(ids[i]);
+        }
     }
 
 }
