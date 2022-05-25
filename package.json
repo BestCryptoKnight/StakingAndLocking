@@ -1,0 +1,30 @@
+{
+  "name": "reflection",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "deploy-test": "npx hardhat run --network ropsten scripts/deploy.js",
+    "deploy-main": "npx hardhat run --network main scripts/deploy.js",
+    "deploy-avalanche": "npx hardhat run --network avalancheMain scripts/deploy.js",
+    "deploy-avalanche-test": "npx hardhat run --network avalancheTest scripts/deploy.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@nomiclabs/buidler": "^1.4.8",
+    "@nomiclabs/hardhat-ethers": "^2.0.3",
+    "@nomiclabs/hardhat-waffle": "^2.0.1",
+    "@openzeppelin/contracts": "^4.0.0",
+    "@openzeppelin/contracts-upgradeable": "^4.0.0",
+    "chai": "^4.3.4",
+    "ethereum-waffle": "^3.4.0",
+    "ethers": "^5.5.2"
+  },
+  "dependencies": {
+    "@nomiclabs/hardhat-etherscan": "^2.0.0",
+    "dotenv": "^16.0.0",
+    "hardhat": "^2.8.0"
+  }
+}
