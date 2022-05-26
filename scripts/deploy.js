@@ -7,7 +7,7 @@ async function main() {
   
     console.log("Account balance:", (await deployer.getBalance()).toString());
   
-    const Token = await ethers.getContractFactory("RCH");
+    const Token = await ethers.getContractFactory("TestToken");
     const token = await Token.deploy();
   
     console.log("Token address:", token.address);
