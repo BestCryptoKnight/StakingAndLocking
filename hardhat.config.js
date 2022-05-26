@@ -12,9 +12,9 @@
        chainId: 97,
        accounts: [`${process.env.PRIVATE_KEY}`]
      },
-     ropsten: {
-      url: "https://ropsten.infura.io/v3/66184b0d11d84613ae4721803d5a8560",
-      chainId: 3,
+     kovan: {
+      url: "https://kovan.infura.io/v3/66184b0d11d84613ae4721803d5a8560",
+      chainId: 42,
       accounts: [`${process.env.PRIVATE_KEY}`]
     },
      main: {
