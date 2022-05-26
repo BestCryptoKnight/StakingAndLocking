@@ -1,3 +1,5 @@
+// contracts/NFT.sol
+// SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity ^0.8.0;
 
 library SafeMath {
@@ -391,7 +393,7 @@ contract Lockup is Ownable {
     uint256 public rewardPoolBalance = 10000000000;
 
     // balance of this contract should be bigger than thresholdMinimum
-    uint256 public thresholdMinimum = 10 ** 11;
+    uint256 public thresholdMinimum;
 
     // default divisor is 6
     uint8 public divisor = 6;
@@ -403,16 +405,16 @@ contract Lockup is Ownable {
     uint8 public claimFee = 100; // the default claim fee is 10
 
     address treasureWallet;
-    uint256 claimFeeAmount;
+    uint256 public claimFeeAmount;
     // when cliamFeeAmount arrives at claimFeeAmountLimit, the values of claimFeeAmount will be transfered (for saving gas fee)
-    uint256 claimFeeAmountLimit;   
+    uint256 public claimFeeAmountLimit;   
 
     address deadAddress = 0x000000000000000000000000000000000000dEaD;
     address rewardWallet;
 
     // this is similar to `claimFeeAmountLimit` (for saving gas fee)
-    uint256 irreversibleAmountLimit;
-    uint256 irreversibleAmount;
+    uint256 public irreversibleAmountLimit;
+    uint256 public irreversibleAmount;
 
     struct StakeInfo {
         int128 duration;  // -1: irreversible, others: reversible (0, 30, 90, 180, 365 days which means lock periods)
@@ -453,12 +455,13 @@ contract Lockup is Ownable {
         NFToken = _NFTAddress;
         totalSupply = uint256(IERC20Metadata(address(stakingToken)).totalSupply());
         // IPancakeV2Router _newPancakeRouter = IPancakeV2Router(0x10ED43C718714eb63d5aA57B78B54704E256024E);
-        IPancakeV2Router _newPancakeRouter = IPancakeV2Router(0xD99D1c33F9fC3444f8101754aBC46c52416550D1);
+        IPancakeV2Router _newPancakeRouter = IPancakeV2Router(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
         router = _newPancakeRouter;
 
         // default is 10000 amount of tokens
         claimFeeAmountLimit = 10000 * 10 ** IERC20Metadata(address(stakingToken)).decimals();
         irreversibleAmountLimit = 10000 * 10 ** IERC20Metadata(address(stakingToken)).decimals();
+        thresholdMinimum = 10 ** 11 * 10 ** IERC20Metadata(address(stakingToken)).decimals();
     }
     
     // pri#
@@ -664,7 +667,9 @@ contract Lockup is Ownable {
         StakeInfo storage stakeInfo = stakedUserList[string2byte32(name)];
         // when Irreversible mode
         if (stakeInfo.duration == -1) return false;
-        if (uint256(uint128(stakeInfo.duration) * 1 days) <= block.timestamp - stakeInfo.stakedTime) return true;
+        // if (uint256(uint128(stakeInfo.duration) * 1 days) <= block.timestamp - stakeInfo.stakedTime) return true;
+        // ***** for test
+        if (uint256(uint128(stakeInfo.duration) * 10 seconds) <= block.timestamp - stakeInfo.stakedTime) return true;
         else return false;
     }
 
@@ -701,7 +706,7 @@ contract Lockup is Ownable {
             require(!isClaimable(name), "Claim lock period is not expired!");
         }
         uint256 reward = _calculateReward(name);
-        bytes32 key = string2byte32(name); 
+        bytes32 key = string2byte32(name);
 
         // update blockListIndex and lastCliamed value
         StakeInfo storage info = stakedUserList[key];
@@ -723,7 +728,9 @@ contract Lockup is Ownable {
     function isClaimable(string memory name) public view returns(bool) {
         StakeInfo storage stakeInfo = stakedUserList[string2byte32(name)];
         uint256 lastClaimed = stakeInfo.lastClaimed;
-        if(block.timestamp - lastClaimed >= rewardClaimInterval * 1 hours) return true;
+        // if(block.timestamp - lastClaimed >= rewardClaimInterval * 1 hours) return true;
+        // &&&&&&&& for test
+        if(block.timestamp - lastClaimed >= rewardClaimInterval * 10 seconds) return true;
         else return false;
     }
 
@@ -777,13 +784,9 @@ contract Lockup is Ownable {
         }
     }
 
-    function newCompound(string[] memory ids) public {
+    function multiCompound(string[] memory ids) public {
         for (uint256 i = 0; i < ids.length; i++) {
             compound(ids[i]);
         }
-    }
-
-    function transferOnwership(address newOwner) public onlyOwner {
-        transferOwnership(newOwner);
     }
 }
