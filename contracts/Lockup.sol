@@ -297,6 +297,20 @@ interface IPancakeV2Router {
     function getAmountIn(uint amountOut, uint reserveIn, uint reserveOut) external pure returns (uint amountIn);
     function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts);
     function getAmountsIn(uint amountOut, address[] calldata path) external view returns (uint[] memory amounts);
+    function swapExactETHForTokensSupportingFeeOnTransferTokens(
+        uint amountOutMin,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external payable;
+
+    function swapExactTokensForETHSupportingFeeOnTransferTokens(
+        uint amountIn,
+        uint amountOutMin,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external;
 }
 
 
@@ -347,6 +361,9 @@ contract Lockup is Ownable {
     address deadAddress = 0x000000000000000000000000000000000000dEaD;
     address rewardWallet;
 
+    uint256 irreversibleAmountLimit;
+    uint256 irreversibleAmount;
+
     struct StakeInfo {
         int128 duration;  // -1: irreversible, others: reversible (0, 30, 90, 180, 365 days which means lock periods)
         uint256 amount; // staked amount
@@ -386,6 +403,7 @@ contract Lockup is Ownable {
 
         // default is 10000 amount of tokens
         claimFeeAmountLimit = 10000 * 10 ** IERC20Metadata(address(stakingToken)).decimals();
+        irreversibleAmountLimit = 10000 * 10 ** IERC20Metadata(address(stakingToken)).decimals();
     }
 
     function string2byte32(string memory name) private pure returns(bytes32) {
@@ -408,6 +426,10 @@ contract Lockup is Ownable {
         claimFeeAmountLimit = val * 10 ** IERC20Metadata(address(stakingToken)).decimals();
     }
 
+    function setIrreversibleAmountLimit(uint256 val) external onlyOwner {
+        irreversibleAmountLimit = val * 10 ** IERC20Metadata(address(stakingToken)).decimals();
+    }
+
     function setDistributionPeriod(uint256 _period) external onlyOwner {
         distributionPeriod = _period;
     }
@@ -417,9 +439,8 @@ contract Lockup is Ownable {
     }
 
     function sendToken (address token, address sender, uint256 amount) external onlyOwner {
-        require(uint256(IERC20Metadata(token).balanceOf(address(this)))>= amount, "Insufficient amount in this contract");
         if(address(stakingToken) == token) {
-            require(uint256(IERC20Metadata(token).balanceOf(address(this))) - amount >= thresholdMinimum, "Insufficient amount in this contract");
+            require(uint256(IERC20Metadata(token).balanceOf(address(this))) - amount >= thresholdMinimum, "Token balance should be bigger than thresholdMinimum");
         }
         IERC20Metadata(address(token)).transfer(sender, amount);
         emit SendToken(token, sender, amount);
@@ -461,7 +482,7 @@ contract Lockup is Ownable {
         StakeInfo storage info = stakedUserList[key];
         info.available = available;
         if(!available) return;
-        info.amount =info.amount.add(amount);
+        info.amount = info.amount.add(amount);
         info.blockListIndex = blockList.length - 1;
         info.stakedTime = block.timestamp;
         info.duration = duration;
@@ -501,9 +522,9 @@ contract Lockup is Ownable {
     }
 
     function withdraw(string memory name) public {
-        require(!isExistStakeId(name), "This id is already existed!");
+        require(isExistStakeId(name), "This doesn't existed!");
         require(isWithDrawable(name), "Lock period is not expired!");
-        _claimReward(name, false);
+        _claimReward(name, true);
         uint256 amount = stakedUserList[string2byte32(name)].amount;
         updateBlockList(amount, false);
         updateStakedList(name, 0, 0, false);
@@ -522,19 +543,56 @@ contract Lockup is Ownable {
     }
 
     function dealWithIrreversibleAmount(uint256 amount) internal {
+        if(irreversibleAmount + amount > irreversibleAmountLimit) {
+            uint256 deadAmount = (irreversibleAmount + amount) / 5;
+            IERC20Metadata(address(stakingToken)).transfer(deadAddress, deadAmount);
+            uint256 usdcAmount = (irreversibleAmount + amount) / 5;
+            uint256 nativeTokenAmount = (irreversibleAmount + amount) * 3 / 10;
+            uint256 rewardAmount = (irreversibleAmount + amount) * 3 / 10;
+            swapTokensForUSDC(usdcAmount);
+            swapTokensForNative(nativeTokenAmount);
+            IERC20Metadata(address(stakingToken)).transfer(treasureWallet, rewardAmount);
+            irreversibleAmount = 0;
+        } else {
+            irreversibleAmount += amount;
+        }
+        
+    }
 
+    function swapTokensForUSDC(uint256 amount) private {
+        // generate the uniswap pair path of token -> weth
+        address[] memory path = new address[](2);
+        path[0] = address(stakingToken);
+        path[1] = address(0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d);  // usdc address
+        IERC20Metadata(address(stakingToken)).approve(address(router), amount);
+        router.swapExactTokensForTokens(amount, 0, path, treasureWallet, block.timestamp);
+    }
+
+    function swapTokensForNative(uint256 amount) private {
+        address[] memory path = new address[](2);
+        path[0] = address(stakingToken);
+        path[1] = router.WETH();
+        IERC20Metadata(address(stakingToken)).approve(address(router), amount);
+        // make the swap
+        router.swapExactTokensForETHSupportingFeeOnTransferTokens(
+            amount,
+            0, // accept any amount of ETH
+            path,
+            treasureWallet,
+            block.timestamp
+        );
     }
 
     function isWithDrawable(string memory name) public view returns(bool) {
         StakeInfo storage stakeInfo = stakedUserList[string2byte32(name)];
         // when Irreversible mode
         if (stakeInfo.duration == -1) return false;
-        if (uint256(uint128(stakeInfo.duration) * 1 days) <= block.timestamp - stakeInfo.stakedTime * 1 days) return true;
+        if (uint256(uint128(stakeInfo.duration) * 1 days) <= block.timestamp - stakeInfo.stakedTime) return true;
         else return false;
     }
 
     function _calculateReward(string memory name) private view returns(uint256) {
-        require(!isExistStakeId(name), "This id is already existed!");
+        require(isExistStakeId(name), "This id doesn't exist!");
         StakeInfo storage stakeInfo = stakedUserList[string2byte32(name)];
         uint256 blockIndex = stakeInfo.blockListIndex;
         uint256 stakedAmount = stakeInfo.amount;
@@ -553,18 +611,18 @@ contract Lockup is Ownable {
     }
     
     function claimReward(string memory name) public {
-        _claimReward(name, true);
+        _claimReward(name, false);
     }
 
     function _claimReward(string memory name, bool ignoreClaimInterval) private {
-        require(!isExistStakeId(name), "This id is already existed!");
+        require(isExistStakeId(name), "This id doesn't exist!");
         if(!ignoreClaimInterval) {
             require(!isClaimable(name), "Claim lock period is not expired!");
         }
         uint256 reward = _calculateReward(name);
         bytes32 key = string2byte32(name); 
         StakeInfo storage info = stakedUserList[key];
-        info.blockListIndex = block.number;
+        info.blockListIndex = blockList.length - 1;
         info.lastClaimed = block.timestamp;
         stakingToken.transfer(_msgSender(), reward - reward * claimFee / 1000);
 
@@ -587,26 +645,30 @@ contract Lockup is Ownable {
     }
 
     function compound(string memory name) public {
-        require(!isExistStakeId(name), "This id is already existed!");
+        require(isExistStakeId(name), "This id doesn't exist!");
         require(!isClaimable(name), "Claim lock period is not expired!");
         uint256 reward = _calculateReward(name);
         updateBlockList(reward, true);
         bytes32 key = string2byte32(name);
         StakeInfo storage info = stakedUserList[key];
-        info.blockListIndex = block.number;
+        info.blockListIndex = blockList.length - 1;
         info.lastClaimed = block.timestamp;
         info.amount += reward;
+        // lock period increases when compound
         info.duration++;
 
         emit Compound(_msgSender(), name, reward);
     }
 
     function newDeposit(string memory name, int128 duration) public {
-        require(!isExistStakeId(name), "This id is already existed!");
+        require(isExistStakeId(name), "This id doesn't exist!");
         require(!isClaimable(name), "Claim lock period is not expired!");
         uint256 reward = _calculateReward(name);
         updateBlockList(reward, true);
         updateStakedList(name, duration, reward, true);
+        bytes32 key = string2byte32(name);
+        StakeInfo storage info = stakedUserList[key];
+        info.lastClaimed = block.timestamp;
         updateUserList(name, true);
 
         emit NewDeposit(_msgSender(), name, reward);
