@@ -612,7 +612,6 @@ contract Lockup is Ownable {
     function deposit(string memory name, int128 duration, uint256 amount) public {
         require(amount > 0, "amount should be bigger than zero!");
         require(!isExistStakeId(name), "This id is already existed!");
-        require(duration >= 30, "lock periods should be longer than 30 days");
 
         if(initialTime == 0) {
             initialTime = block.timestamp;
@@ -645,7 +644,7 @@ contract Lockup is Ownable {
     }
 
     function getBoost(int128 duration) internal pure returns (uint8) {
-        if (duration == -1) return 10;      // irreversable
+        if (duration < 0) return 10;      // irreversable
         else if (duration < 30) return 1;   // no lock
         else if (duration < 60) return 2;   // more than 1 month
         else if (duration < 90) return 3;   // more than 3 month
