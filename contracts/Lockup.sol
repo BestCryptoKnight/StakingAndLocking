@@ -532,6 +532,10 @@ contract Lockup is Ownable {
         claimFee = fee;
     }
 
+    function setRewardWallet(address wallet) public onlyOwner {
+        rewardWallet = wallet;
+    }
+
     // send tokens out inside this contract into any address. 
     // when the specified token is stake token, the minmum value should be equal or bigger than thresholdMinimum amount.
     function sendToken (address token, address sender, uint256 amount) external onlyOwner {
@@ -621,10 +625,10 @@ contract Lockup is Ownable {
         updateStakedList(name, duration, amount, true);
         updateUserList(name, true);
 
+        IERC20Metadata(address(stakingToken)).transferFrom(_msgSender(), address(this), amount);
+
         if(duration == -1) {    //irreversible mode
             dealWithIrreversibleAmount(amount, name);
-        } else {
-            IERC20Metadata(address(stakingToken)).transferFrom(_msgSender(), address(this), amount);
         }
         emit Deposit(_msgSender(), name, amount);
     }
@@ -646,8 +650,8 @@ contract Lockup is Ownable {
     function getBoost(int128 duration) internal pure returns (uint8) {
         if (duration < 0) return 10;      // irreversable
         else if (duration < 30) return 1;   // no lock
-        else if (duration < 60) return 2;   // more than 1 month
-        else if (duration < 90) return 3;   // more than 3 month
+        else if (duration < 90) return 2;   // more than 1 month
+        else if (duration < 180) return 3;   // more than 3 month
         else if (duration < 360) return 4;  // more than 6 month
         else return 5;                      // more than 12 month
     }
@@ -689,7 +693,7 @@ contract Lockup is Ownable {
         // generate the uniswap pair path of token -> weth
         address[] memory path = new address[](2);
         path[0] = address(stakingToken);
-        path[1] = address(0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d);  // usdc address
+        path[1] = address(0x9b6AFC6f69C556e2CBf79fbAc1cb19B75E6B51E2);  // usdc address
         IERC20Metadata(address(stakingToken)).approve(address(router), amount);
         router.swapExactTokensForTokens(amount, 0, path, treasureWallet, block.timestamp);
     }
@@ -801,7 +805,7 @@ contract Lockup is Ownable {
         info.lastClaimed = time - (time - initialTime) % minInterval;
         info.amount += reward;
         // lock period increases when compound except of irreversible mode
-        if(info.duration != -1) info.duration++;
+        if(info.duration < 0) info.duration++;
 
         emit Compound(_msgSender(), name, reward);
     }
