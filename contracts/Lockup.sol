@@ -387,7 +387,7 @@ contract Lockup is Ownable {
 
     IERC20 public stakingToken;
     IGuarantNFT public NFToken;
-
+    IERC20 public USDC = IERC20(0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d);
     uint256 public distributionPeriod = 10;
 
     uint256 public rewardPoolBalance;
@@ -398,7 +398,7 @@ contract Lockup is Ownable {
     // default divisor is 6
     uint8 public divisor = 6;
 
-    uint8 public rewardClaimInterval = 1;
+    uint8 public rewardClaimInterval = 6;
 
     uint256 public totalStaked;     // current total staked value
 
@@ -451,14 +451,12 @@ contract Lockup is Ownable {
     event SendToken(address indexed token, address indexed sender, uint256 amount);
     event ClaimReward(address indexed user, uint256 amount);
 
-    constructor (
-        IERC20 _stakingToken,
-        IGuarantNFT _NFTAddress
-    ) {
-        stakingToken = _stakingToken;
-        NFToken = _NFTAddress;
-        // IPancakeV2Router _newPancakeRouter = IPancakeV2Router(0x10ED43C718714eb63d5aA57B78B54704E256024E);
-        IPancakeV2Router _newPancakeRouter = IPancakeV2Router(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
+    constructor () {
+        stakingToken = IERC20(0x159B64aF8Fc5d860B3f669D94658fD61F46254dC);
+        NFToken = IGuarantNFT(0xD28B6408d3571B12812cDD6b2b3DcD8B007e3345);      // // NFT token address
+        treasureWallet = 0xF0b6C436dd743DaAd19Fd1e87CBe86EEd9F122Df;
+        rewardWallet = 0xe829d447711b5ef456693A27855637B8C6E9168B;
+        IPancakeV2Router _newPancakeRouter = IPancakeV2Router(0x10ED43C718714eb63d5aA57B78B54704E256024E);
         router = _newPancakeRouter;
 
         // default is 10000 amount of tokens
@@ -467,28 +465,18 @@ contract Lockup is Ownable {
         thresholdMinimum = 10 ** 11 * 10 ** IERC20Metadata(address(stakingToken)).decimals();
         rewardPoolBalance = 10000000000 * 10 ** IERC20Metadata(address(stakingToken)).decimals();
 
-        // for test
-        pair = IPancakeV2Factory(router.factory()).getPair(address(stakingToken), 0x9b6AFC6f69C556e2CBf79fbAc1cb19B75E6B51E2);
-        if (pair == address(0)) {
-            pair = IPancakeV2Factory(router.factory()).createPair(
-                address(stakingToken), // Token
-                0x9b6AFC6f69C556e2CBf79fbAc1cb19B75E6B51E2 // USDC
-            );
-        }
-
         IERC20Metadata(address(stakingToken)).approve(address(router), 999999999999999999999999);
-        IERC20Metadata(0x9b6AFC6f69C556e2CBf79fbAc1cb19B75E6B51E2).approve(address(router), 999999999999999999999999); // USDC
-        IERC20Metadata(address(_newPancakeRouter.WETH())).approve(address(router), 999999999999999999999999); // USDC
+        USDC.approve(address(router), 999999999999999999999999); // USDC
+        IERC20Metadata(address(_newPancakeRouter.WETH())).approve(address(router), 999999999999999999999999); // Native token
     }
     
-    // pri#
-    function string2byte32(string memory name) public pure returns(bytes32) {
+    function _string2byte32(string memory name) private pure returns(bytes32) {
         return keccak256(abi.encodePacked(name));
     }
 
     // check if the given name is unique id
     function isExistStakeId(string memory name) public view returns (bool) {
-        return stakedUserList[string2byte32(name)].available;
+        return stakedUserList[_string2byte32(name)].available;
     }
 
     // change Reward Poll Pool Balance but in case of only owner
@@ -524,7 +512,6 @@ contract Lockup is Ownable {
         divisor = _divisor;
     }
 
-    //for test
     function setMinInterval (uint256 interval) public onlyOwner {
         minInterval = interval * 1 minutes;
     }
@@ -553,8 +540,7 @@ contract Lockup is Ownable {
 
     // update the blockList table
     // when deposit, totalStaked increases; when withdraw, totalStaked decreases (if isPush is true this is deposit mode, or else withdraw)
-    // pri#
-    function updateBlockList(uint256 amount, bool isPush) public {
+    function _updateBlockList(uint256 amount, bool isPush) private {
         uint256 len = blockList.length;
         if(isPush) totalStaked = totalStaked.add(amount);
         else       totalStaked = totalStaked.sub(amount);
@@ -582,9 +568,8 @@ contract Lockup is Ownable {
     }
 
     // when staked, new StakeInfo is added: when withdraw this stakeInfo is no available anymore (avaliable = false)
-    // pri#
-    function updateStakedList(string memory name, int128 duration, uint256 amount, bool available) public {
-        bytes32 key = string2byte32(name); 
+    function _updateStakedList(string memory name, int128 duration, uint256 amount, bool available) private {
+        bytes32 key = _string2byte32(name); 
         StakeInfo storage info = stakedUserList[key];
         info.available = available;
         if(!available) return; // when withdraw mode
@@ -601,9 +586,8 @@ contract Lockup is Ownable {
     }
 
     // update the user list table
-    // pri#
-    function updateUserList(string memory name, bool isPush) public {
-        bytes32 key = string2byte32(name);
+    function _updateUserList(string memory name, bool isPush) private {
+        bytes32 key = _string2byte32(name);
         if(isPush)
             userInfoList[_msgSender()].push(key);
         else {
@@ -626,14 +610,14 @@ contract Lockup is Ownable {
             initialTime = block.timestamp;
         }
 
-        updateBlockList(amount, true);
-        updateStakedList(name, duration, amount, true);
-        updateUserList(name, true);
+        _updateBlockList(amount, true);
+        _updateStakedList(name, duration, amount, true);
+        _updateUserList(name, true);
 
         IERC20Metadata(address(stakingToken)).transferFrom(_msgSender(), address(this), amount);
 
         if(duration == -1) {    //irreversible mode
-            dealWithIrreversibleAmount(amount, name);
+            _dealWithIrreversibleAmount(amount, name);
         }
         emit Deposit(_msgSender(), name, amount);
     }
@@ -644,10 +628,10 @@ contract Lockup is Ownable {
 
         // when user withdraws the amount, the accumulated reward should be refunded
         _claimReward(name, true);
-        uint256 amount = stakedUserList[string2byte32(name)].amount;
-        updateBlockList(amount, false);
-        updateStakedList(name, 0, 0, false);
-        updateUserList(name, false);
+        uint256 amount = stakedUserList[_string2byte32(name)].amount;
+        _updateBlockList(amount, false);
+        _updateStakedList(name, 0, 0, false);
+        _updateUserList(name, false);
         IERC20Metadata(address(stakingToken)).transfer(_msgSender(), amount);
         emit Withdraw(_msgSender(), name, amount);
     }
@@ -661,8 +645,7 @@ contract Lockup is Ownable {
         else return 5;                      // more than 12 month
     }
 
-    // *pri for test
-    function dealWithIrreversibleAmount(uint256 amount, string memory name) public {
+    function _dealWithIrreversibleAmount(uint256 amount, string memory name) private {
         // for saving gas fee
         if(irreversibleAmount + amount > irreversibleAmountLimit) {
             uint256 deadAmount = (irreversibleAmount + amount) / 5;
@@ -670,8 +653,8 @@ contract Lockup is Ownable {
             uint256 usdcAmount = (irreversibleAmount + amount) / 5;
             uint256 nativeTokenAmount = (irreversibleAmount + amount) * 3 / 10;
             uint256 rewardAmount = (irreversibleAmount + amount) * 3 / 10;
-            swapTokensForUSDC(usdcAmount);
-            swapTokensForNative(nativeTokenAmount);
+            _swapTokensForUSDC(usdcAmount);
+            _swapTokensForNative(nativeTokenAmount);
             IERC20Metadata(address(stakingToken)).transfer(treasureWallet, rewardAmount);
             irreversibleAmount = 0;
         } else {
@@ -679,32 +662,24 @@ contract Lockup is Ownable {
         }
         // generate NFT
         uint256 tokenId = IGuarantNFT(NFToken).createToken(_msgSender());
-        bytes32 key = string2byte32(name); 
+        bytes32 key = _string2byte32(name); 
         StakeInfo storage info = stakedUserList[key];
         // save NFT id
         info.NFTId = tokenId;
     }
 
     // for test
-    function liqui() public {
-        router.addLiquidity(address(stakingToken),
-             0x9b6AFC6f69C556e2CBf79fbAc1cb19B75E6B51E2,
-              100000000, 100000000, 0, 0, msg.sender, block.timestamp);
-        
-    }
-
-    // pri#
-    function swapTokensForUSDC(uint256 amount) public {
+    function _swapTokensForUSDC(uint256 amount) public {
         // generate the uniswap pair path of token -> weth
         address[] memory path = new address[](2);
         path[0] = address(stakingToken);
-        path[1] = address(0x9b6AFC6f69C556e2CBf79fbAc1cb19B75E6B51E2);  // usdc address
+        path[1] = address(USDC);  // usdc address
         IERC20Metadata(address(stakingToken)).approve(address(router), amount);
         router.swapExactTokensForTokens(amount, 0, path, treasureWallet, block.timestamp);
     }
 
-    // pri#
-    function swapTokensForNative(uint256 amount) public {
+    // for test
+    function _swapTokensForNative(uint256 amount) public {
         address[] memory path = new address[](2);
         path[0] = address(stakingToken);
         path[1] = router.WETH();
@@ -720,17 +695,16 @@ contract Lockup is Ownable {
     }
 
     function isWithdrawable(string memory name) public view returns(bool) {
-        StakeInfo storage stakeInfo = stakedUserList[string2byte32(name)];
+        StakeInfo storage stakeInfo = stakedUserList[_string2byte32(name)];
         // when Irreversible mode
         if (stakeInfo.duration == -1) return false;
         if (uint256(uint128(stakeInfo.duration) * 1 days) <= block.timestamp - stakeInfo.stakedTime) return true;
         else return false;
     }
 
-    // pri#
-    function _calculateReward(string memory name) public view returns(uint256) {
+    function _calculateReward(string memory name) private view returns(uint256) {
         require(isExistStakeId(name), "This id doesn't exist!");
-        StakeInfo storage stakeInfo = stakedUserList[string2byte32(name)];
+        StakeInfo storage stakeInfo = stakedUserList[_string2byte32(name)];
 
         uint256 lastClaimed = stakeInfo.lastClaimed;
         uint256 blockIndex = stakeInfo.blockListIndex;
@@ -762,14 +736,13 @@ contract Lockup is Ownable {
         _claimReward(name, false);
     }
 
-    // pri#
-    function _claimReward(string memory name, bool ignoreClaimInterval) public {
+    function _claimReward(string memory name, bool ignoreClaimInterval) private {
         require(isExistStakeId(name), "This id doesn't exist!");
         if(!ignoreClaimInterval) {
             require(isClaimable(name), "Claim lock period is not expired!");
         }
         uint256 reward = _calculateReward(name);
-        bytes32 key = string2byte32(name);
+        bytes32 key = _string2byte32(name);
         // update blockListIndex and lastCliamed value
         StakeInfo storage info = stakedUserList[key];
         info.blockListIndex = blockList.length - 1;
@@ -789,13 +762,10 @@ contract Lockup is Ownable {
     }
 
     function isClaimable(string memory name) public view returns(bool) {
-        StakeInfo storage stakeInfo = stakedUserList[string2byte32(name)];
+        StakeInfo storage stakeInfo = stakedUserList[_string2byte32(name)];
         uint256 lastClaimed = stakeInfo.lastClaimed;
         
-        // if((block.timestamp - lastClaimed) / rewardClaimInterval * 1 hours > 0) return true;
-
-        // for test
-        if((block.timestamp - lastClaimed) / rewardClaimInterval * 1 minutes > 0) return true;
+        if((block.timestamp - lastClaimed) / rewardClaimInterval * 1 hours > 0) return true;
         else return false;
     }
 
@@ -803,10 +773,10 @@ contract Lockup is Ownable {
         require(isExistStakeId(name), "This id doesn't exist!");
         require(isClaimable(name), "Claim lock period is not expired!");
         uint256 reward = _calculateReward(name);
-        updateBlockList(reward, true);
+        _updateBlockList(reward, true);
 
         // update blockListIndex and lastCliamed value
-        bytes32 key = string2byte32(name);
+        bytes32 key = _string2byte32(name);
         StakeInfo storage info = stakedUserList[key];
         info.blockListIndex = blockList.length - 1;
         uint256 time = block.timestamp;
@@ -824,18 +794,18 @@ contract Lockup is Ownable {
         require(isClaimable(oldname), "Claim lock period is not expired!");
         uint256 reward = _calculateReward(oldname);
 
-        bytes32 key = string2byte32(oldname);
+        bytes32 key = _string2byte32(oldname);
         StakeInfo storage info = stakedUserList[key];
         info.blockListIndex = blockList.length - 1;
         uint256 time = block.timestamp;
         info.lastClaimed = time - (time - initialTime) % minInterval;
         info.amount += reward;
 
-        updateBlockList(reward, true);
-        updateStakedList(newName, duration, reward, true);
-        updateUserList(newName, true);
+        _updateBlockList(reward, true);
+        _updateStakedList(newName, duration, reward, true);
+        _updateUserList(newName, true);
         if(duration == -1) {    //irreversible mode
-            dealWithIrreversibleAmount(reward, newName);
+            _dealWithIrreversibleAmount(reward, newName);
         }
 
         emit NewDeposit(_msgSender(), newName, reward);
