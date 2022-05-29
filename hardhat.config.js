@@ -17,7 +17,7 @@
       chainId: 42,
       accounts: [`${process.env.PRIVATE_KEY}`]
     },
-     main: {
+     mainbsc: {
        url: "https://bsc-dataseed.binance.org/",
        chainId: 56,
        accounts: [`${process.env.PRIVATE_KEY}`]

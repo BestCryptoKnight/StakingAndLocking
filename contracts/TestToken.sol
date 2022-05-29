@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 
 contract TestToken is ERC20, ERC20Burnable, Ownable {
-    constructor() ERC20("ERC20 Token Sample1", "Test1") {
+    constructor() ERC20("ERC20 Token Sample1", "TestUSDC") {
         _mint(msg.sender, 10000000000000000000 * 10**18 );
     }
 

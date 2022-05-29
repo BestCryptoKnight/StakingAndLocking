@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "deploy-test": "npx hardhat run --network kovan scripts/deploy.js",
-    "deploy-main": "npx hardhat run --network main scripts/deploy.js",
+    "deploy-bnb": "npx hardhat run --network bnb scripts/deploy.js",
+    "deploy-main": "npx hardhat run --network mainbsc scripts/deploy.js",
     "deploy-avalanche": "npx hardhat run --network avalancheMain scripts/deploy.js",
     "deploy-avalanche-test": "npx hardhat run --network avalancheTest scripts/deploy.js"
   },
@@ -23,7 +24,7 @@
     "ethers": "^5.5.2"
   },
   "dependencies": {
-    "@nomiclabs/hardhat-etherscan": "^2.0.0",
+    "@nomiclabs/hardhat-etherscan": "^3.0.3",
     "dotenv": "^16.0.0",
     "hardhat": "^2.8.0"
   }
