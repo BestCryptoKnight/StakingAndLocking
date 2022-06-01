@@ -526,7 +526,7 @@ contract Lockup is Ownable {
         // IERC20Metadata(address(_newPancakeRouter.WETH())).approve(address(router), 999999999999999999999999); // Native token
 
         // this is for main net
-        stakingToken = IERC20(0x5ccDDC1962CCc16e58D0B902598965321807726f);
+        stakingToken = IERC20(0x8F97CF0408bf2711B028E3FDc840ab7ad2567aba);
         NFToken = IERC721Metadata(0xBf5B9D8598C46410424e9957ffeDA9e119d98A49);      // // NFT token address
         treasureWallet = 0xF0b6C436dd743DaAd19Fd1e87CBe86EEd9F122Df;
         rewardWallet = 0xe829d447711b5ef456693A27855637B8C6E9168B;
