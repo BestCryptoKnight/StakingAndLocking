@@ -37,7 +37,8 @@
    },
    etherscan: {
     //  apiKey: "NURDXE28N6MM9VI216UCSEBZVV5IA7UWSS" // for ether net work
-     apiKey: "N2E5BV7EU18ZEFEMGM8YS5NBPPQH9QJK3Q"
+    //  apiKey: "N2E5BV7EU18ZEFEMGM8YS5NBPPQH9QJK3Q"
+    apiKey: "BCT83TFQ1QJ7XPRIVG2V82YVF6SVTRVNDE"
    },
    solidity: {
      version: "0.8.0",

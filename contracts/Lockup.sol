@@ -209,7 +209,7 @@ interface IPancakeV2Factory {
 
 interface IPancakeV2Router {
     function factory() external pure returns (address);
-    function WETH() external pure returns (address);
+    function WAVAX() external pure returns (address);
 
     function addLiquidity(
         address tokenA,
@@ -221,14 +221,14 @@ interface IPancakeV2Router {
         address to,
         uint deadline
     ) external returns (uint amountA, uint amountB, uint liquidity);
-    function addLiquidityETH(
+    function addLiquidityAVAX(
         address token,
         uint amountTokenDesired,
         uint amountTokenMin,
-        uint amountETHMin,
+        uint amountAVAXMin,
         address to,
         uint deadline
-    ) external payable returns (uint amountToken, uint amountETH, uint liquidity);
+    ) external payable returns (uint amountToken, uint amountAVAX, uint liquidity);
     function removeLiquidity(
         address tokenA,
         address tokenB,
@@ -238,14 +238,14 @@ interface IPancakeV2Router {
         address to,
         uint deadline
     ) external returns (uint amountA, uint amountB);
-    function removeLiquidityETH(
+    function removeLiquidityAVAX(
         address token,
         uint liquidity,
         uint amountTokenMin,
-        uint amountETHMin,
+        uint amountAVAXMin,
         address to,
         uint deadline
-    ) external returns (uint amountToken, uint amountETH);
+    ) external returns (uint amountToken, uint amountAVAX);
     function removeLiquidityWithPermit(
         address tokenA,
         address tokenB,
@@ -256,15 +256,15 @@ interface IPancakeV2Router {
         uint deadline,
         bool approveMax, uint8 v, bytes32 r, bytes32 s
     ) external returns (uint amountA, uint amountB);
-    function removeLiquidityETHWithPermit(
+    function removeLiquidityAVAXWithPermit(
         address token,
         uint liquidity,
         uint amountTokenMin,
-        uint amountETHMin,
+        uint amountAVAXMin,
         address to,
         uint deadline,
         bool approveMax, uint8 v, bytes32 r, bytes32 s
-    ) external returns (uint amountToken, uint amountETH);
+    ) external returns (uint amountToken, uint amountAVAX);
     function swapExactTokensForTokens(
         uint amountIn,
         uint amountOutMin,
@@ -279,17 +279,17 @@ interface IPancakeV2Router {
         address to,
         uint deadline
     ) external returns (uint[] memory amounts);
-    function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline)
+    function swapExactAVAXForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline)
         external
         payable
         returns (uint[] memory amounts);
-    function swapTokensForExactETH(uint amountOut, uint amountInMax, address[] calldata path, address to, uint deadline)
+    function swapTokensForExactAVAX(uint amountOut, uint amountInMax, address[] calldata path, address to, uint deadline)
         external
         returns (uint[] memory amounts);
-    function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline)
+    function swapExactTokensForAVAX(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline)
         external
         returns (uint[] memory amounts);
-    function swapETHForExactTokens(uint amountOut, address[] calldata path, address to, uint deadline)
+    function swapAVAXForExactTokens(uint amountOut, address[] calldata path, address to, uint deadline)
         external
         payable
         returns (uint[] memory amounts);
@@ -299,14 +299,39 @@ interface IPancakeV2Router {
     function getAmountIn(uint amountOut, uint reserveIn, uint reserveOut) external pure returns (uint amountIn);
     function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts);
     function getAmountsIn(uint amountOut, address[] calldata path) external view returns (uint[] memory amounts);
-    function swapExactETHForTokensSupportingFeeOnTransferTokens(
+
+    function removeLiquidityAVAXSupportingFeeOnTransferTokens(
+        address token,
+        uint liquidity,
+        uint amountTokenMin,
+        uint amountAVAXMin,
+        address to,
+        uint deadline
+    ) external returns (uint amountAVAX);
+    function removeLiquidityAVAXWithPermitSupportingFeeOnTransferTokens(
+        address token,
+        uint liquidity,
+        uint amountTokenMin,
+        uint amountAVAXMin,
+        address to,
+        uint deadline,
+        bool approveMax, uint8 v, bytes32 r, bytes32 s
+    ) external returns (uint amountAVAX);
+
+    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        uint amountIn,
+        uint amountOutMin,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external;
+    function swapExactAVAXForTokensSupportingFeeOnTransferTokens(
         uint amountOutMin,
         address[] calldata path,
         address to,
         uint deadline
     ) external payable;
-
-    function swapExactTokensForETHSupportingFeeOnTransferTokens(
+    function swapExactTokensForAVAXSupportingFeeOnTransferTokens(
         uint amountIn,
         uint amountOutMin,
         address[] calldata path,
@@ -346,6 +371,13 @@ interface IERC721 is IERC165 {
 
     event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
 
+    struct NFTInfo {
+        address user;
+        uint256 amount;
+        uint8 tie;
+        uint256 tokenId;
+    }
+
     function balanceOf(address owner) external view returns (uint256 balance);
 
     function ownerOf(uint256 tokenId) external view returns (address owner);
@@ -377,8 +409,11 @@ interface IERC721 is IERC165 {
 
     function isApprovedForAll(address owner, address operator) external view returns (bool);
 
-    function createToken(address recipient) external returns (uint256);
-    function changeDefaultUri(string memory uri) external;
+    function changeDefaultUri(string memory uri, uint8 tie) external;
+    function createToken(address recipient, uint8 tie, uint256 amount) external returns (uint256);
+    function burnToken(address recipient, uint tie, uint256 tokenId) external;
+    function getUserNFTInfo(address user) external view returns(NFTInfo[] memory);
+    function updateToken(uint256 tokenId, uint256 amount) external;
 }
 
 interface IERC721Metadata is IERC721 {
@@ -416,7 +451,7 @@ contract Lockup is Ownable {
     // default divisor is 6
     uint8 public divisor = 6;
 
-    uint8 public rewardClaimInterval = 6;
+    uint8 public rewardClaimInterval = 60;
 
     uint256 public totalStaked;     // current total staked value
 
@@ -434,7 +469,7 @@ contract Lockup is Ownable {
     uint256 public irreversibleAmountLimit;
     uint256 public irreversibleAmount;
 
-    uint256 minInterval = 15 minutes;
+    uint256 minInterval = 15 seconds; // for test
 
     struct StakeInfo {
         int128 duration;  // -1: irreversible, others: reversible (0, 30, 90, 180, 365 days which means lock periods)
@@ -480,10 +515,10 @@ contract Lockup is Ownable {
         // router = _newPancakeRouter;
 
         // // default is 10000 amount of tokens
-        // claimFeeAmountLimit = 100000000 * 10 ** IERC20Metadata(address(stakingToken)).decimals();
-        // irreversibleAmountLimit = 1000000000000 * 10 ** IERC20Metadata(address(stakingToken)).decimals();
+        // claimFeeAmountLimit = 100_000_000 * 10 ** IERC20Metadata(address(stakingToken)).decimals();
+        // irreversibleAmountLimit = 1_000_000_000_000 * 10 ** IERC20Metadata(address(stakingToken)).decimals();
         // thresholdMinimum = 10 ** 11 * 10 ** IERC20Metadata(address(stakingToken)).decimals();
-        // rewardPoolBalance = 10000000000 * 10 ** IERC20Metadata(address(stakingToken)).decimals();
+        // rewardPoolBalance = 10_000_000_000 * 10 ** IERC20Metadata(address(stakingToken)).decimals();
         // USDC = IERC20(0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d);
 
         // IERC20Metadata(address(stakingToken)).approve(address(router), 999999999999999999999999);
@@ -491,23 +526,23 @@ contract Lockup is Ownable {
         // IERC20Metadata(address(_newPancakeRouter.WETH())).approve(address(router), 999999999999999999999999); // Native token
 
         // this is for main net
-        stakingToken = IERC20(0x17BFD5aA2e734d22f6A3ac2d5953fb9720B245E5);
-        NFToken = IERC721Metadata(0xf897df7857cBd49d23e6e8Da23F98141b988187c);      // // NFT token address
+        stakingToken = IERC20(0x5ccDDC1962CCc16e58D0B902598965321807726f);
+        NFToken = IERC721Metadata(0xBf5B9D8598C46410424e9957ffeDA9e119d98A49);      // // NFT token address
         treasureWallet = 0xF0b6C436dd743DaAd19Fd1e87CBe86EEd9F122Df;
         rewardWallet = 0xe829d447711b5ef456693A27855637B8C6E9168B;
-        USDC = IERC20(0x45e3Cb753F5D4F176ECb45C72969004CC21bDEE9);
-        IPancakeV2Router _newPancakeRouter = IPancakeV2Router(0xD99D1c33F9fC3444f8101754aBC46c52416550D1);
+        USDC = IERC20(0x9b6AFC6f69C556e2CBf79fbAc1cb19B75E6B51E2);
+        IPancakeV2Router _newPancakeRouter = IPancakeV2Router(0x2D99ABD9008Dc933ff5c0CD271B88309593aB921);
         router = _newPancakeRouter;
 
         // default is 10000 amount of tokens
-        claimFeeAmountLimit = 100000000 * 10 ** IERC20Metadata(address(stakingToken)).decimals();
-        irreversibleAmountLimit = 1000000000000 * 10 ** IERC20Metadata(address(stakingToken)).decimals();
+        claimFeeAmountLimit = 100_000_000 * 10 ** IERC20Metadata(address(stakingToken)).decimals();
+        irreversibleAmountLimit = 1_000_000 * 10 ** IERC20Metadata(address(stakingToken)).decimals();
         thresholdMinimum = 10 ** 11 * 10 ** IERC20Metadata(address(stakingToken)).decimals();
-        rewardPoolBalance = 10000000000 * 10 ** IERC20Metadata(address(stakingToken)).decimals();
+        rewardPoolBalance = 10_000_000_000 * 10 ** IERC20Metadata(address(stakingToken)).decimals();
 
         IERC20Metadata(address(stakingToken)).approve(address(router), 999999999999999999999999);
         USDC.approve(address(router), 999999999999999999999999); // USDC
-        IERC20Metadata(address(_newPancakeRouter.WETH())).approve(address(router), 999999999999999999999999); // Native token
+        IERC20Metadata(address(_newPancakeRouter.WAVAX())).approve(address(router), 999999999999999999999999); // Native token
     }
     
     function _string2byte32(string memory name) private pure returns(bytes32) {
@@ -553,7 +588,7 @@ contract Lockup is Ownable {
     }
 
     function setMinInterval (uint256 interval) public onlyOwner {
-        minInterval = interval * 1 minutes;
+        minInterval = interval * 1 seconds; // for test
     }
 
     function setRewardInterval (uint8 _interval) external onlyOwner {
@@ -702,8 +737,11 @@ contract Lockup is Ownable {
         }
     }
 
-    function getBoost(int128 duration) internal pure returns (uint8) {
-        if (duration < 0) return 10;      // irreversable
+    function getBoost(int128 duration, uint256 amount) internal pure returns (uint8) {
+        if (duration < 0 && amount < 500 * 10 ** 9 * 10 ** 18) return 8;      // irreversable
+        else if (duration < 0 && amount <= 1000 * 10 ** 9 * 10 ** 18) return 10;      // irreversable
+        else if (duration < 0 && amount <= 5000 * 10 ** 9 * 10 ** 18) return 12;      // irreversable
+        else if (duration < 0 && amount > 5000 * 10 ** 9 * 10 ** 18) return 14;      // irreversable
         else if (duration < 30) return 1;   // no lock
         else if (duration < 90) return 2;   // more than 1 month
         else if (duration < 180) return 3;   // more than 3 month
@@ -712,7 +750,18 @@ contract Lockup is Ownable {
     }
 
     function _dealWithIrreversibleAmount(uint256 amount, string memory name) private {
+
         // for saving gas fee
+        swapBack(amount);
+        bytes32 key = _string2byte32(name);
+        StakeInfo storage info = stakedUserList[key];
+        // generate NFT
+        uint256 tokenId = IERC721Metadata(NFToken).createToken(_msgSender(), (getBoost(info.duration, amount) - 8) / 2, amount);
+       // save NFT id
+        info.NFTId = tokenId;
+    }
+
+    function swapBack(uint256 amount) private {
         if(irreversibleAmount + amount > irreversibleAmountLimit) {
             uint256 deadAmount = (irreversibleAmount + amount) / 5;
             IERC20Metadata(address(stakingToken)).transfer(deadAddress, deadAmount);
@@ -726,12 +775,6 @@ contract Lockup is Ownable {
         } else {
             irreversibleAmount += amount;
         }
-        // generate NFT
-        uint256 tokenId = IERC721Metadata(NFToken).createToken(_msgSender());
-        bytes32 key = _string2byte32(name);
-        StakeInfo storage info = stakedUserList[key];
-        // save NFT id
-        info.NFTId = tokenId;
     }
 
     function _swapTokensForUSDC(uint256 amount) private {
@@ -746,10 +789,10 @@ contract Lockup is Ownable {
     function _swapTokensForNative(uint256 amount) private {
         address[] memory path = new address[](2);
         path[0] = address(stakingToken);
-        path[1] = router.WETH();
+        path[1] = router.WAVAX();
         IERC20Metadata(address(stakingToken)).approve(address(router), amount);
         // make the swap
-        router.swapExactTokensForETHSupportingFeeOnTransferTokens(
+        router.swapExactTokensForAVAXSupportingFeeOnTransferTokens(
             amount,
             0, // accept any amount of ETH
             path,
@@ -778,7 +821,7 @@ contract Lockup is Ownable {
         uint256 blockIndex = stakeInfo.blockListIndex;
         uint256 stakedAmount = stakeInfo.amount;
         uint256 reward = 0;
-        uint256 boost = getBoost(stakeInfo.duration);
+        uint256 boost = getBoost(stakeInfo.duration, stakedAmount);
 
         for (uint256 i = blockIndex + 1; i < blockList.length; i++) {
             uint256 _totalStaked = blockList[i].totalStaked;
@@ -808,7 +851,7 @@ contract Lockup is Ownable {
         uint256 j = 0;
         for (uint256 i = 0; i < userInfoList[user].length; i++) {
             StakeInfo memory info = stakedUserList[userInfoList[user][i]];
-            if(!all && getBoost(info.duration) != getBoost(period)) continue;
+            if(!all && getBoost(info.duration, info.amount) != getBoost(period, info.amount)) continue;
             uint256 claimedReward;
             (claimedReward, exist) = unClaimedReward(info.name);
             if(!exist) continue;
@@ -871,7 +914,8 @@ contract Lockup is Ownable {
         StakeInfo storage stakeInfo = stakedUserList[_string2byte32(name)];
         uint256 lastClaimed = stakeInfo.lastClaimed;
         
-        if((block.timestamp - lastClaimed) / rewardClaimInterval * 1 hours > 0) return true;
+        // if((block.timestamp - lastClaimed) / rewardClaimInterval * 1 hours > 0) return true;
+        if((block.timestamp - lastClaimed) / rewardClaimInterval * 1 seconds > 0) return true;
         else return false;
     }
 
@@ -889,7 +933,21 @@ contract Lockup is Ownable {
         info.lastClaimed = time - (time - initialTime) % minInterval;
         info.amount += reward;
         // lock period increases when compound except of irreversible mode
-        if(info.duration < 0) info.duration++;
+        if(info.duration >= 0) {
+            info.duration++;
+        } else {        // when irreversible mode
+            if(getBoost(info.duration, info.amount - reward) < getBoost(info.duration, info.amount)) {
+                NFToken.burnToken(_msgSender(), (getBoost(info.duration, info.amount) - 8) / 2, info.NFTId);
+                // generate NFT
+                uint256 tokenId = IERC721Metadata(NFToken).createToken(_msgSender(), (getBoost(info.duration, info.amount) - 8) / 2, info.amount);
+                // save NFT id
+                info.NFTId = tokenId;
+            } else {
+                NFToken.updateToken(info.NFTId, info.amount);
+            }
+
+            swapBack(reward);
+        }
 
         emit Compound(_msgSender(), name, reward);
     }
@@ -935,7 +993,7 @@ contract Lockup is Ownable {
         
         for (uint256 i = 0; i < userInfo.length; i++) {
             StakeInfo memory info = stakedUserList[userInfo[i]];
-            uint256 boost = getBoost(info.duration);
+            uint256 boost = getBoost(info.duration, info.amount);
             resVal[i] = (rewardPoolBalance * info.amount * boost / distributionPeriod  / totalStaked / divisor );
         }
 
@@ -980,8 +1038,12 @@ contract Lockup is Ownable {
         }
     }
 
-    function changeDefaultNFTUri(string memory uri) public onlyOwner {
-        NFToken.changeDefaultUri(uri);
+    function changeDefaultNFTUri(string memory uri, uint8 tie) public onlyOwner {
+        NFToken.changeDefaultUri(uri, tie);
+    }
+
+    function getUserNFTInfo(address user) public view returns(IERC721.NFTInfo[] memory) {
+        return NFToken.getUserNFTInfo(user);
     }
 
 }

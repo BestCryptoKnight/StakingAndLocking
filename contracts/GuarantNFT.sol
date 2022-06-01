@@ -1,3 +1,5 @@
+// contracts/NFT.sol
+// SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity ^0.8.0;
 
 library Strings {
@@ -458,23 +460,72 @@ abstract contract Ownable is Context {
 contract GuarantNFT is ERC721URIStorage, Ownable {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
-    string defaultUri;
+    string[4] classUri;
+
+    struct NFTInfo {
+        address user;
+        uint256 amount;
+        uint8 tie;
+        uint256 tokenId;
+    }
+
+    mapping(uint256=>NFTInfo) public NFTInfoList;
+    mapping(address=>uint256[]) public userInfoList;
 
     constructor() ERC721("Guarant NFT", "GIR") {
-        defaultUri = "https://gateway.pinata.cloud/ipfs/QmaFxL15oSodfwnpJ5exy3sHN6zb6v8wiCxhdL99Lj75Ak";
+        classUri[0] = "https://gateway.pinata.cloud/ipfs/QmaFxL15oSodfwnpJ5exy3sHN6zb6v8wiCxhdL99Lj75Ak";
+        classUri[1] = "https://gateway.pinata.cloud/ipfs/QmXZYdzV8tvwqcCoxaLbUWaGtpaFqZ5SMyLATb7gJQvNqW";
+        classUri[2] = "https://gateway.pinata.cloud/ipfs/QmZxJJaE52r81oWskh66tayeuzArtEeL3bC1Y9mtFKRmZd";
+        classUri[3] = "https://gateway.pinata.cloud/ipfs/QmQdK9a64aK7yuEnMuivHywmwS9EbSQT2o8TxNxwyPQFtP";
     }
     
-    function createToken(address recipient) public returns (uint256) {
+    function createToken(address recipient, uint8 tie, uint256 amount) public returns (uint256) {
+        require(tie < 4, "class tie should be less than 4");
         _tokenIds.increment();
         uint256 newItemId = _tokenIds.current();
-
         _mint(recipient, newItemId);
-        _setTokenURI(newItemId, defaultUri);
+        _setTokenURI(newItemId, classUri[tie]);
+        NFTInfo storage info = NFTInfoList[newItemId];
+        info.amount = amount;
+        info.user = recipient;
+        info.tie = tie;
+        info.tokenId = newItemId;
+
+        uint256[] storage uInfo = userInfoList[recipient];
+        uInfo.push(newItemId);
 
         return newItemId;
     }
 
-    function changeDefaultUri(string memory uri) public onlyOwner {
-        defaultUri = uri;
+    function burnToken(address recipient, uint tie, uint256 tokenId) public  {
+        require(tie < 4, "class tie should be less than 4");
+        delete NFTInfoList[tokenId];
+        uint256[] storage tokenIdList = userInfoList[recipient];
+        for(uint256 i = 0; i < tokenIdList.length; i++) {
+            if(tokenId == tokenIdList[i]) {
+                tokenIdList[i] = tokenIdList[tokenIdList.length - 1];
+                tokenIdList.pop();
+                break;
+            }
+        }
+        _burn(tokenId);
+    }
+
+    function changeDefaultUri(string memory uri, uint8 tie) public  {
+        require(tie < 4, "class tie should be less than 4");
+        classUri[tie] = uri;
+    }
+
+    function getUserNFTInfo(address user) public view returns(NFTInfo[] memory) {
+        uint256[] memory tokenIdList = userInfoList[user];
+        NFTInfo[] memory res = new NFTInfo[](tokenIdList.length);
+        for (uint256 i = 0; i < tokenIdList.length; i++) {
+            res[i] = NFTInfoList[tokenIdList[i]];
+        }
+        return res;
+    }
+
+    function updateToken(uint256 tokenId, uint256 amount) public  {
+        NFTInfoList[tokenId].amount = amount;
     }
 }
