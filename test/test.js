@@ -39,7 +39,7 @@ const delay = ms => new Promise(res => setTimeout(res, ms));
 // Start test block
 describe("Racekingdom", function () {
   beforeEach(async function () {
-    NFTFactory = await ethers.getContractFactory("GuarantNFT");
+    NFTFactory = await ethers.getContractFactory("Lockup");
     NFTContract = await NFTFactory.deploy();
 
     // LockupFactory = await ethers.getContractFactory("Lockup");

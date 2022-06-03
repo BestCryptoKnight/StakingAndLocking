@@ -1,13 +1,11 @@
 /**
- *Submitted for verification at testnet.snowtrace.io on 2022-06-01
+ *Submitted for verification at testnet.snowtrace.io on 2022-06-02
 */
 
 /**
- *Submitted for verification at testnet.snowtrace.io on 2022-05-30
+ *Submitted for verification at testnet.snowtrace.io on 2022-06-02
 */
 
-/*  SPDX-License-Identifier: MIT  */
-    
 pragma solidity ^0.8.0;
 
 library SafeMath {
@@ -252,7 +250,7 @@ interface IJoeRouter {
     ) external;
 }
 
-contract CheemsXX is IERC20Metadata, Ownable {
+contract TigerCheemsX is IERC20Metadata, Ownable {
     using SafeMath for uint256;
     using Address for address;
     
@@ -263,12 +261,12 @@ contract CheemsXX is IERC20Metadata, Ownable {
     address public devWallet = 0xe829d447711b5ef456693A27855637B8C6E9168B;
     address public teamWallet = 0xF0b6C436dd743DaAd19Fd1e87CBe86EEd9F122Df;
     
-    string constant _name = "CheemsXX";
-    string constant _symbol = "CheemsXX";
+    string constant _name = "TCheemsX";
+    string constant _symbol = "TCheemsX";
     uint8 constant _decimals = 18;
     
     uint256 private constant MAX = ~uint256(0);
-    uint256 internal constant _totalSupply = 100000000000000000 * (10**18);
+    uint256 internal constant _totalSupply = 1000000000000 * (10**18);
     uint256 internal _reflectedSupply = (MAX - (MAX % _totalSupply));
     
     uint256 public collectedFeeTotal;
