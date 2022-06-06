@@ -449,7 +449,7 @@ contract Lockup is Ownable {
     uint256 public thresholdMinimum;
 
     // default divisor is 6
-    uint8 public divisor = 6;
+    uint8 public divisor = 10;
 
     uint8 public rewardClaimInterval = 90;
 
@@ -724,6 +724,12 @@ contract Lockup is Ownable {
         _updateUserList(name, false);
         IERC20Metadata(address(stakingToken)).transfer(_msgSender(), amount);
         emit Withdraw(_msgSender(), name, amount);
+    }
+
+    function unStakeMulti(string[] memory name) public {
+        for (uint256 i = 0; i < name.length; i++) {
+            unStake(name[i]);
+        }
     }
 
     function unStakeAll() public {
