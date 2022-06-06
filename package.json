@@ -9,7 +9,7 @@
     "deploy-bnb": "npx hardhat run --network bnb scripts/deploy.js",
     "deploy-main": "npx hardhat run --network mainbsc scripts/deploy.js",
     "deploy-avalanche": "npx hardhat run --network avalancheMain scripts/deploy.js",
-    "deploy-avalanche-test": "npx hardhat run --network avalancheTest scripts/deploy.js"
+    "avax-test": "npx hardhat run --network avalancheTest scripts/deploy.js"
   },
   "author": "",
   "license": "ISC",
@@ -21,7 +21,8 @@
     "@openzeppelin/contracts-upgradeable": "^4.0.0",
     "chai": "^4.3.6",
     "ethereum-waffle": "^3.4.0",
-    "ethers": "^5.5.2"
+    "ethers": "^5.5.2",
+    "hardhat-contract-sizer": "^2.5.1"
   },
   "dependencies": {
     "@nomiclabs/hardhat-etherscan": "^3.0.3",

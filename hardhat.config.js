@@ -3,6 +3,7 @@
  */
  require("@nomiclabs/hardhat-waffle");
  require("@nomiclabs/hardhat-etherscan");
+ require('hardhat-contract-sizer');
  require('dotenv').config()
  
  module.exports = {
@@ -45,10 +46,17 @@
      settings: {
        optimizer: {
          enabled: true,
-         runs: 9999,
+         runs: 1,
        },
      },
  
    },
+   contractSizer: {
+    alphaSort: true,
+    disambiguatePaths: false,
+    runOnCompile: true,
+    strict: true,
+    only: [':ERC20$'],
+  }
  };
  
