@@ -246,12 +246,12 @@ contract Lockup is Ownable {
 
     constructor (){
         // this is for main net
-        stakingToken = IERC20(0x086a0E1399053752577f3b3B7A1275162F695CCB);
-        NFToken = IERC721Metadata(0xB7CcDDD2aB8153EB3891fAE7178E703923c91Bf4);      // // NFT token address
+        stakingToken = IERC20(0xBe2D30503b12f5495c9b5f3aF275C41365bbAb35);
+        NFToken = IERC721Metadata(0xB2ad02f37372D7298a48baD6e3df97a2c023dAA3);      // // NFT token address
         treasureWallet = 0xF0b6C436dd743DaAd19Fd1e87CBe86EEd9F122Df;
         rewardWallet = 0xe829d447711b5ef456693A27855637B8C6E9168B;
         USDC = IERC20(0x9b6AFC6f69C556e2CBf79fbAc1cb19B75E6B51E2);
-        StakeNFT = IERC721Metadata(0x19732F59af41E834FE0e168b96cd38E7447666fd);
+        StakeNFT = IERC721Metadata(0x0a74cE198C1a59fbeC07E07eB056AAfF17a6E854);
         IPancakeV2Router _newPancakeRouter = IPancakeV2Router(0x2D99ABD9008Dc933ff5c0CD271B88309593aB921);
         router = _newPancakeRouter;
 
@@ -463,7 +463,7 @@ contract Lockup is Ownable {
         require(isExistStakeId(name), "doesn't existed!");
         uint256 amount = stakedUserList[_string2byte32(name)].amount;
         require(canWithdrawPrimaryToken(amount), "threshold limit");
-
+        require(stakedUserList[_string2byte32(name)].NFTStakingId != 0, "Invalid operatorN");
         _claimReward(name, true);
         _updateBlockList(amount, false);
         _updateStakedList(name, 0, 0, false);
@@ -475,7 +475,8 @@ contract Lockup is Ownable {
     function unStake(string memory name) public {
         require(isExistStakeId(name), "doesn't existed!");
         require(isWithdrawable(name), "period not expired!");
-
+        StakeInfo storage stakeInfo = stakedUserList[_string2byte32(name)];
+        require(stakeInfo.NFTStakingId == 0, "Invalid operator");
         // when user withdraws the amount, the accumulated reward should be refunded
         uint256 amount = stakedUserList[_string2byte32(name)].amount;
         require(canWithdrawPrimaryToken(amount), "threshold limit!");
@@ -502,6 +503,10 @@ contract Lockup is Ownable {
             StakeInfo memory info = stakedUserList[userInfoList[_msgSender()][i]];
             if(!isWithdrawable(info.name)) continue;
             unStake(info.name);
+            if(info.NFTStakingId == 0)
+                unStake(info.name);
+            else
+                unStakeNFT(info.name);
         }
     }
 

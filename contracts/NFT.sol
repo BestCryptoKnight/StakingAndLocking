@@ -479,7 +479,7 @@ contract GuarantNFT is ERC721URIStorage, Ownable {
         classUri[3] = "https://gateway.pinata.cloud/ipfs/QmQdK9a64aK7yuEnMuivHywmwS9EbSQT2o8TxNxwyPQFtP";
     }
     
-    function createToken(address recipient, uint8 tie, uint256 amount) public returns (uint256) {
+    function createToken(address recipient, uint8 tie, uint256 amount) public onlyOwner returns (uint256) {
         require(tie < 4, "class tie should be less than 4");
         _tokenIds.increment();
         uint256 newItemId = _tokenIds.current();
@@ -497,7 +497,7 @@ contract GuarantNFT is ERC721URIStorage, Ownable {
         return newItemId;
     }
 
-    function burnToken(address recipient, uint tie, uint256 tokenId) public  {
+    function burnToken(address recipient, uint tie, uint256 tokenId) public onlyOwner  {
         require(tie < 4, "class tie should be less than 4");
         delete NFTInfoList[tokenId];
         uint256[] storage tokenIdList = userInfoList[recipient];
@@ -511,7 +511,7 @@ contract GuarantNFT is ERC721URIStorage, Ownable {
         _burn(tokenId);
     }
 
-    function changeDefaultUri(string memory uri, uint8 tie) public  {
+    function changeDefaultUri(string memory uri, uint8 tie) public onlyOwner {
         require(tie < 4, "class tie should be less than 4");
         classUri[tie] = uri;
     }
@@ -534,7 +534,7 @@ contract GuarantNFT is ERC721URIStorage, Ownable {
         return (res, uri);
     }
 
-    function updateToken(uint256 tokenId, uint256 amount) public  {
+    function updateToken(uint256 tokenId, uint256 amount) public onlyOwner {
         NFTInfoList[tokenId].amount = amount;
     }
 }
