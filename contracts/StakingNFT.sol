@@ -460,6 +460,7 @@ abstract contract Ownable is Context {
 contract CheemsXNFT is ERC721URIStorage, Ownable {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
+    mapping(address=>uint256[]) public userInfo;
 
     constructor() ERC721("CheemsXNFT", "CXN") {
     }
@@ -469,7 +470,20 @@ contract CheemsXNFT is ERC721URIStorage, Ownable {
         uint256 newItemId = _tokenIds.current();
         _safeMint(recipient, newItemId);
         _setTokenURI(newItemId, uri);
-  
+        userInfo[recipient].push(newItemId);
         return newItemId;
+    }
+
+    function transferFrom(address from, address to, uint256 tokenId) public override {
+        safeTransferFrom(from, to, tokenId);
+        uint256 len = userInfo[from].length;
+        for(uint256 i = 0; i < len; i++){
+            if(userInfo[from][i] == tokenId) {
+                userInfo[from][i] = userInfo[from][len-1];
+                userInfo[from].pop();
+                break;
+            }
+        }
+        userInfo[to].push(tokenId);
     }
 }

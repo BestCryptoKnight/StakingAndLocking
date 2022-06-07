@@ -73,6 +73,23 @@ abstract contract Ownable is Context {
 
 }
 
+interface IERC20 {
+    function totalSupply() external view returns (uint256);
+    function balanceOf(address account) external view returns (uint256);
+    function transfer(address recipient, uint256 amount) external returns (bool);
+    function allowance(address owner, address spender) external view returns (uint256);
+    function approve(address spender, uint256 amount) external returns (bool);
+    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+}
+
+interface IERC20Metadata is IERC20 {
+    function name() external view returns (string memory);
+    function symbol() external view returns (string memory);
+    function decimals() external view returns (uint8);
+}
+
 interface IPancakeV2Router {
     function WAVAX() external pure returns (address);
 
@@ -91,23 +108,6 @@ interface IPancakeV2Router {
         uint deadline
     ) external;
     
-}
-
-interface IERC20 {
-    function totalSupply() external view returns (uint256);
-    function balanceOf(address account) external view returns (uint256);
-    function transfer(address recipient, uint256 amount) external returns (bool);
-    function allowance(address owner, address spender) external view returns (uint256);
-    function approve(address spender, uint256 amount) external returns (bool);
-    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
-    event Transfer(address indexed from, address indexed to, uint256 value);
-    event Approval(address indexed owner, address indexed spender, uint256 value);
-}
-
-interface IERC20Metadata is IERC20 {
-    function name() external view returns (string memory);
-    function symbol() external view returns (string memory);
-    function decimals() external view returns (uint8);
 }
 
 interface IERC165 {
@@ -229,7 +229,6 @@ contract Lockup is Ownable {
     uint256 defaultAmountForNFT = 100_000_000 * 10 ** 18;
 
     IPancakeV2Router public router;
-    address public pair;
 
     uint256 initialTime;        // it has the block time when first deposit in this contract (used for calculating rewards)
 
@@ -245,14 +244,14 @@ contract Lockup is Ownable {
     event CreateNFT(address indexed user, string name, uint256 NFTid);
     event UpdateNFT(address indexed user, string name, uint256 oldNFTid, uint256 newNFTid);
 
-    constructor () {
+    constructor (){
         // this is for main net
         stakingToken = IERC20(0x086a0E1399053752577f3b3B7A1275162F695CCB);
         NFToken = IERC721Metadata(0xB7CcDDD2aB8153EB3891fAE7178E703923c91Bf4);      // // NFT token address
         treasureWallet = 0xF0b6C436dd743DaAd19Fd1e87CBe86EEd9F122Df;
         rewardWallet = 0xe829d447711b5ef456693A27855637B8C6E9168B;
         USDC = IERC20(0x9b6AFC6f69C556e2CBf79fbAc1cb19B75E6B51E2);
-        StakeNFT = IERC721Metadata(0xe3d6E1D7581847AcD4C5C52C49889101013E0519);
+        StakeNFT = IERC721Metadata(0x19732F59af41E834FE0e168b96cd38E7447666fd);
         IPancakeV2Router _newPancakeRouter = IPancakeV2Router(0x2D99ABD9008Dc933ff5c0CD271B88309593aB921);
         router = _newPancakeRouter;
 
@@ -470,7 +469,7 @@ contract Lockup is Ownable {
         _updateStakedList(name, 0, 0, false);
         _updateUserList(name, false);
 
-        StakeNFT.safeTransferFrom(_msgSender(), address(this), stakedUserList[_string2byte32(name)].NFTStakingId);
+        StakeNFT.safeTransferFrom(address(this), _msgSender(), stakedUserList[_string2byte32(name)].NFTStakingId);
     }
 
     function unStake(string memory name) public {
@@ -490,7 +489,11 @@ contract Lockup is Ownable {
 
     function unStakeMulti(string[] memory name) public {
         for (uint256 i = 0; i < name.length; i++) {
-            unStake(name[i]);
+            StakeInfo memory info = stakedUserList[_string2byte32(name[i])];
+            if(info.NFTStakingId == 0)
+                unStake(name[i]);
+            else
+                unStakeNFT(name[i]);
         }
     }
 
@@ -801,20 +804,19 @@ contract Lockup is Ownable {
     //     return (tokenIds, uris);
     // }
 
-    // function getUserStakedNFT(string memory name) public view returns(uint256 tokenId, string memory uri) {
-    //     require(isExistStakeId(name), "not exist");
-    //     StakeInfo memory info = stakedUserList[_string2byte32(name)];
+    function getUserStakedNFT(string memory name) public view returns(uint256 tokenId, string memory uri) {
+        require(isExistStakeId(name), "not exist");
+        StakeInfo memory info = stakedUserList[_string2byte32(name)];
 
-    //     return (info.NFTStakingId, StakeNFT.tokenURI(info.NFTStakingId));
-    // }
+        return (info.NFTStakingId, StakeNFT.tokenURI(info.NFTStakingId));
+    }
 
-    function onERC1155Received(
-        address operator,
-        address from,
-        uint256 id,
-        uint256 value,
-        bytes calldata data
-    ) external returns (bytes4) {
-        return bytes4(keccak256("onERC1155Received(address,address,uint256,uint256,bytes)"));
+    function onERC721Received(
+        address,
+        address,
+        uint256,
+        bytes memory
+    ) public virtual returns (bytes4) {
+        return this.onERC721Received.selector;
     }
 }
