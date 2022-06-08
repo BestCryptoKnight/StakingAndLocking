@@ -475,7 +475,7 @@ contract CheemsXNFT is ERC721URIStorage, Ownable {
     }
 
     function safeTransferFrom(address from, address to, uint256 tokenId) public override {
-        safeTransferFrom(from, to, tokenId, "");
+        super.safeTransferFrom(from, to, tokenId, "");
         updateUserInfo(from, to, tokenId);
     }
 
