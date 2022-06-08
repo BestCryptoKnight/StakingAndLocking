@@ -247,7 +247,7 @@ contract Lockup is Ownable {
     constructor (){
         // this is for main net
         stakingToken = IERC20(0xBe2D30503b12f5495c9b5f3aF275C41365bbAb35);
-        NFToken = IERC721Metadata(0xB2ad02f37372D7298a48baD6e3df97a2c023dAA3);      // // NFT token address
+        NFToken = IERC721Metadata(0x13B93645Bb6eF349800C3099d288DeeA8b0CD4f1);      // // NFT token address
         treasureWallet = 0xF0b6C436dd743DaAd19Fd1e87CBe86EEd9F122Df;
         rewardWallet = 0xe829d447711b5ef456693A27855637B8C6E9168B;
         USDC = IERC20(0x9b6AFC6f69C556e2CBf79fbAc1cb19B75E6B51E2);
@@ -502,7 +502,6 @@ contract Lockup is Ownable {
         for (uint256 i = 0; i < userInfoList[_msgSender()].length; i++) {
             StakeInfo memory info = stakedUserList[userInfoList[_msgSender()][i]];
             if(!isWithdrawable(info.name)) continue;
-            unStake(info.name);
             if(info.NFTStakingId == 0)
                 unStake(info.name);
             else

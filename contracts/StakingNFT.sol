@@ -475,7 +475,16 @@ contract CheemsXNFT is ERC721URIStorage, Ownable {
     }
 
     function safeTransferFrom(address from, address to, uint256 tokenId) public override {
-        super.safeTransferFrom(from, to, tokenId);
+        safeTransferFrom(from, to, tokenId, "");
+        updateUserInfo(from, to, tokenId);
+    }
+
+    function safeTransferFrom(address from, address to, uint256 tokenId, bytes memory _data) public override {
+        super.safeTransferFrom(from, to, tokenId, _data);
+        updateUserInfo(from, to, tokenId);
+    }
+
+    function updateUserInfo(address from, address to, uint256 tokenId) private {
         uint256 len = userInfo[from].length;
         for(uint256 i = 0; i < len; i++){
             if(userInfo[from][i] == tokenId) {
@@ -485,6 +494,11 @@ contract CheemsXNFT is ERC721URIStorage, Ownable {
             }
         }
         userInfo[to].push(tokenId);
+    }
+
+    function transferFrom(address from, address to, uint256 tokenId) public override {
+        super.transferFrom(from, to, tokenId);
+        updateUserInfo(from, to, tokenId);
     }
 
     function getUserInfo (address user) public view returns(uint256[] memory) {
