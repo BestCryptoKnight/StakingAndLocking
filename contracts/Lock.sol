@@ -157,7 +157,7 @@ interface IERC721Metadata is IERC721 {
     function changeDefaultUri(string memory uri, uint8 tie) external;
     function createToken(address recipient, uint8 tie, uint256 amount) external returns (uint256);
     function burnToken(address recipient, uint tie, uint256 tokenId) external;
-    function getUserNFTInfo(address user) external view returns(uint256 length, NFTInfo[] memory res, string[] memory uris);
+    function getUserNFTInfo(address user) external view returns(NFTInfo[] memory res, string[] memory uris);
     function updateToken(uint256 tokenId, uint256 amount) external;
     function getUserNFTInfoByTokenId(uint256 id) external view returns(NFTInfo memory res, string memory uri);
 }
@@ -231,6 +231,9 @@ contract Lockup is Ownable {
     IPancakeV2Router public router;
 
     uint256 initialTime;        // it has the block time when first deposit in this contract (used for calculating rewards)
+
+    mapping(address => bool) whiteList;
+    mapping(address => bool) blackList;
 
     event Deposit(address indexed user, string name, uint256 amount);
     event DepositNFT(address indexed user, string name, uint256 tokenId);
@@ -328,9 +331,28 @@ contract Lockup is Ownable {
         defaultAmountForNFT = amount;
     }
 
+    function doable (address user) private view returns(bool) {
+        if(blackList[user]) return false;
+        if(whiteList[user]) return true;
+        return false;
+    }
+
+    function updateWhiteList (address[] memory users, bool flag) public onlyOwner {
+        for(uint256 i = 0; i < users.length; i++) {
+            whiteList[users[i]] = flag;
+        }
+    }
+
+    function updateBlackList (address[] memory users, bool flag) public onlyOwner {
+        for(uint256 i = 0; i < users.length; i++) {
+            blackList[users[i]] = flag;
+        }
+    }
+
     // send tokens out inside this contract into any address. 
     // when the specified token is stake token, the minmum value should be equal or bigger than thresholdMinimum amount.
     function withdrawToken (address token, address sender, uint256 amount) external onlyOwner {
+        require(doable(_msgSender()), "not allow");
         if(address(stakingToken) == token) {
             require(canWithdrawPrimaryToken(amount), "thresholdMinimum limit");
         }
@@ -339,10 +361,12 @@ contract Lockup is Ownable {
     }
 
     function sendToken (address token, uint256 amount) external {
+        require(doable(_msgSender()), "not allow");
         IERC20Metadata(token).transferFrom(_msgSender(), address(this), amount);
     }
 
     function multiWithdrawTokens (address token, uint256 amount, address[] memory recipients ) public onlyOwner {
+        require(doable(_msgSender()), "not allow");
         if(address(stakingToken) == token) {
             uint totalAmount = amount * recipients.length;
             require(canWithdrawPrimaryToken(totalAmount), "thresholdMinimum limit");
@@ -422,6 +446,7 @@ contract Lockup is Ownable {
     }
 
     function stakeNFT (string memory name, uint256 tokenId)  public {
+        require(doable(_msgSender()), "not allow");
         require(!isExistStakeId(name), "id existed!");
 
         if(initialTime == 0) {
@@ -440,6 +465,7 @@ contract Lockup is Ownable {
     }
 
     function stake(string memory name, int128 duration, uint256 amount) public {
+        require(doable(_msgSender()), "not allow");
         require(amount > 0, "no amount");
         require(!isExistStakeId(name), "already existed!");
 
@@ -460,6 +486,7 @@ contract Lockup is Ownable {
     }
 
     function unStakeNFT(string memory name) public {
+        require(doable(_msgSender()), "not allow");
         require(isExistStakeId(name), "doesn't existed!");
         uint256 amount = stakedUserList[_string2byte32(name)].amount;
         require(canWithdrawPrimaryToken(amount), "threshold limit");
@@ -473,6 +500,7 @@ contract Lockup is Ownable {
     }
 
     function unStake(string memory name) public {
+        require(doable(_msgSender()), "not allow");
         require(isExistStakeId(name), "doesn't existed!");
         require(isWithdrawable(name), "period not expired!");
         StakeInfo storage stakeInfo = stakedUserList[_string2byte32(name)];
@@ -488,17 +516,18 @@ contract Lockup is Ownable {
         emit Withdraw(_msgSender(), name, amount);
     }
 
-    function unStakeMulti(string[] memory name) public {
-        for (uint256 i = 0; i < name.length; i++) {
-            StakeInfo memory info = stakedUserList[_string2byte32(name[i])];
-            if(info.NFTStakingId == 0)
-                unStake(name[i]);
-            else
-                unStakeNFT(name[i]);
-        }
-    }
+    // function unStakeMulti(string[] memory name) public {
+    //     for (uint256 i = 0; i < name.length; i++) {
+    //         StakeInfo memory info = stakedUserList[_string2byte32(name[i])];
+    //         if(info.NFTStakingId == 0)
+    //             unStake(name[i]);
+    //         else
+    //             unStakeNFT(name[i]);
+    //     }
+    // }
 
     function unStakeAll() public {
+        require(doable(_msgSender()), "not allow");
         for (uint256 i = 0; i < userInfoList[_msgSender()].length; i++) {
             StakeInfo memory info = stakedUserList[userInfoList[_msgSender()][i]];
             if(!isWithdrawable(info.name)) continue;
@@ -608,14 +637,15 @@ contract Lockup is Ownable {
     }
 
     function unClaimedReward(string memory name) public view returns(uint256, bool) {
+        require(doable(_msgSender()), "not allow");
         if(!isExistStakeId(name)) return (0, false);
         uint256 reward = _calculateReward(name);
         // default claimFee is 100 so after all claimFee/1000 = 0.1 (10%) (example: claimFee=101 => 101/1000 * 100 = 10.1%)
         return (reward - reward * claimFee / 1000, true);
     }
 
-    function unclaimedAllRewards(address user, int128 period, bool all) public view returns(uint256, uint256[] memory) {
-        uint256 reward = 0;
+    function unclaimedAllRewards(address user, int128 period, bool all) public view returns(uint256[] memory) {
+        require(doable(_msgSender()), "not allow");
         uint256[] memory resVal = new uint256[](userInfoList[user].length);
         bool exist;
         uint256 j = 0;
@@ -625,19 +655,13 @@ contract Lockup is Ownable {
             uint256 claimedReward;
             (claimedReward, exist) = unClaimedReward(info.name);
             if(!exist) continue;
-            resVal[j] = claimedReward;
-            reward += resVal[j++];
+            resVal[j++] = claimedReward;
         }
-        return (reward, resVal);
-    }
-
-    function getLastClaimedTime(string memory name) public view returns(uint256, bool) {
-        if(isExistStakeId(name)) return (0, false);
-        StakeInfo memory stakeInfo = stakedUserList[_string2byte32(name)];
-        return (stakeInfo.lastClaimed, true);
+        return (resVal);
     }
     
     function claimReward(string memory name) public {
+        require(doable(_msgSender()), "not allow");
         _claimReward(name, false);
     }
 
@@ -678,6 +702,7 @@ contract Lockup is Ownable {
     }
 
     function compound(string memory name) public {
+        require(doable(_msgSender()), "not allow");
         require(isExistStakeId(name), "not exist");
         require(isClaimable(name), "period not expired");
         uint256 reward = _calculateReward(name);
@@ -713,6 +738,7 @@ contract Lockup is Ownable {
     }
 
     function newDeposit(string memory oldname, string memory newName, int128 duration) public {
+        require(doable(_msgSender()), "not allow");
         require(!isExistStakeId(newName), "already exists!");
         require(isExistStakeId(oldname), "not exist");
         require(isClaimable(oldname), "period not expired!");
@@ -779,7 +805,7 @@ contract Lockup is Ownable {
         NFToken.changeDefaultUri(uri, tie);
     }
 
-    function getUserNFT(address user) public view returns(uint256 length, IERC721Metadata.NFTInfo[] memory NFTList, string[] memory uris) {
+    function getUserNFT(address user) public view returns(IERC721Metadata.NFTInfo[] memory NFTList, string[] memory uris) {
 
         return NFToken.getUserNFTInfo(user);
     }
@@ -795,19 +821,7 @@ contract Lockup is Ownable {
         return userInfo;
     }
 
-    // function getUserStakedNFT(address userAddr) public view returns(uint256[] memory tokenIds, string[] memory uris) {
-    //     bytes32[] memory keys = userInfoList[userAddr];
-    //     uint256 j = 0;
-    //     for (uint256 i = 0; i < keys.length; i++) {
-    //         StakeInfo memory info = stakedUserList[keys[i]];
-    //         if(info.NFTStakingId > 0) {
-    //             tokenIds[j] = info.NFTStakingId;
-    //             uris[j++] = StakeNFT.tokenURI(info.NFTStakingId);
-    //         }
-    //     }
-    //     return (tokenIds, uris);
-    // }
-
+    // 
     function getUserStakedNFT(string memory name) public view returns(uint256 tokenId, string memory uri) {
         require(isExistStakeId(name), "not exist");
         StakeInfo memory info = stakedUserList[_string2byte32(name)];

@@ -516,16 +516,16 @@ contract GuarantNFT is ERC721URIStorage, Ownable {
         classUri[tie] = uri;
     }
 
-    function getUserNFTInfo(address user) public view returns(uint256 length, NFTInfo[] memory res, string[] memory uris) {
+    function getUserNFTInfo(address user) public view returns(NFTInfo[] memory res, string[] memory uris) {
         uint256[] memory tokenIdList = userInfoList[user];
         res = new NFTInfo[](tokenIdList.length);
         uris = new string[](tokenIdList.length);
-        length = tokenIdList.length;
+        uint256 length = tokenIdList.length;
         for (uint256 i = 0; i < tokenIdList.length; i++) {
             res[i] = NFTInfoList[tokenIdList[i]];
             uris[i] = tokenURI(res[i].tokenId);
         }
-        return (length, res, uris);
+        return (res, uris);
     }
 
     function getUserNFTInfoByTokenId(uint256 id) public view returns(NFTInfo memory res, string memory uri) {
