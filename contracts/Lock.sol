@@ -520,18 +520,7 @@ contract Lockup is Ownable {
         emit Withdraw(_msgSender(), name, amount);
     }
 
-    // function unStakeMulti(string[] memory name) public {
-    //     for (uint256 i = 0; i < name.length; i++) {
-    //         StakeInfo memory info = stakedUserList[_string2byte32(name[i])];
-    //         if(info.NFTStakingId == 0)
-    //             unStake(name[i]);
-    //         else
-    //             unStakeNFT(name[i]);
-    //     }
-    // }
-
     function unStakeAll() public {
-        require(doable(_msgSender()), "NA");
         for (uint256 i = 0; i < userInfoList[_msgSender()].length; i++) {
             StakeInfo storage info = stakedUserList[userInfoList[_msgSender()][i]];
             if(!isWithdrawable(info.name)) continue;
@@ -618,6 +607,7 @@ contract Lockup is Ownable {
 
     function _calculateReward(string memory name) private view returns(uint256) {
         require(isExistStakeId(name), "not exist");
+        require(totalStaked != 0, "no staked");
         StakeInfo storage stakeInfo = stakedUserList[_string2byte32(name)];
 
         uint256 lastClaimed = stakeInfo.lastClaimed;
@@ -628,10 +618,12 @@ contract Lockup is Ownable {
 
         for (uint256 i = blockIndex + 1; i < blockList.length; i++) {
             uint256 _totalStaked = blockList[i].totalStaked;
+            lastClaimed = blockList[i].blockNumber;
+            if(_totalStaked == 0) continue;
             reward = reward + ((blockList[i].blockNumber - lastClaimed).div(minInterval) 
                                 * (rewardPoolBalance * stakedAmount * boost / distributionPeriod  / _totalStaked / divisor )  // formula
                                 * (minInterval)  / (24 hours));
-            lastClaimed = blockList[i].blockNumber;
+            
         }
 
         reward = reward + ((block.timestamp - lastClaimed).div(minInterval) 
