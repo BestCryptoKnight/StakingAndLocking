@@ -217,11 +217,6 @@ contract Lockup is Ownable {
         uint256 totalStaked;      // this is used for calculating reward.
     }
 
-    // struct UserNFTInfo {
-    //     IERC721Metadata.NFTInfo NFTList;
-    //     string uri;
-    // }
-
     mapping(bytes32 => StakeInfo) public stakedUserList;
     mapping (address => bytes32[]) public userInfoList; // container of user's id
     BlockInfo[] public blockList;
@@ -234,6 +229,17 @@ contract Lockup is Ownable {
 
     mapping(address => bool) public whiteList;
     mapping(address => bool) public blackList;
+
+    bool public useWhiteList;
+    uint8 public unLockBoost = 1;
+    uint8 public month1 = 2;
+    uint8 public month3 = 3;
+    uint8 public month6 = 4;
+    uint8 public year1 = 5;
+    uint8 public tieA = 8;
+    uint8 public tieB = 10;
+    uint8 public tieC = 12;
+    uint8 public tieD = 14;
 
     event Deposit(address indexed user, string name, uint256 amount);
     event DepositNFT(address indexed user, string name, uint256 tokenId);
@@ -250,7 +256,7 @@ contract Lockup is Ownable {
     constructor (){
         // this is for main net
         stakingToken = IERC20(0x1F3fa5ba82eCfE38EB16d522377807Bc0F8C8519);
-        NFToken = IERC721Metadata(0x9356E6C39afCb1B09CC45567287b34495632A36B);      // // NFT token address
+        NFToken = IERC721Metadata(0x51d97333295575d5551dceB1b6B7300C60919E7E);      // // NFT token address
         treasureWallet = 0xF0b6C436dd743DaAd19Fd1e87CBe86EEd9F122Df;
         rewardWallet = 0xe829d447711b5ef456693A27855637B8C6E9168B;
         USDC = IERC20(0x9b6AFC6f69C556e2CBf79fbAc1cb19B75E6B51E2);
@@ -266,8 +272,8 @@ contract Lockup is Ownable {
         rewardPoolBalance = 10_000_000_000 * 10 ** IERC20Metadata(address(stakingToken)).decimals();
     }
     
-    function _string2byte32(string memory name) private pure returns(bytes32) {
-        return keccak256(abi.encodePacked(name));
+    function _string2byte32(string memory name) private view returns(bytes32) {
+        return keccak256(abi.encodePacked(name, _msgSender()));
     }
 
     // check if the given name is unique id
@@ -334,7 +340,8 @@ contract Lockup is Ownable {
 
     function doable (address user) private view returns(bool) {
         if(blackList[user]) return false;
-        if(whiteList[user]) return true;
+        if(!useWhiteList) return true;
+        if(useWhiteList && whiteList[user]) return true;
         return false;
     }
 
@@ -350,11 +357,21 @@ contract Lockup is Ownable {
         }
     }
 
-    // function transferOwnership(address newOwner) public override onlyOwner {
-    //     whiteList[newOwner] = true;
-    //     blackList[newOwner] = true;
-    //     super.transferOwnership(newOwner);
-    // }
+    function setUseWhiteList(bool flag) public onlyOwner {
+        useWhiteList = flag;
+    }
+
+    function setBoostConst(uint8 _type, uint8 val) public onlyOwner {
+        if(_type == 0) unLockBoost = val;
+        else if(_type == 1) month1 = val;
+        else if(_type == 2) month3 = val;
+        else if(_type == 3) month6 = val;
+        else if(_type == 4) year1 = val;
+        else if(_type == 5) tieA = val;
+        else if(_type == 6) tieB = val;
+        else if(_type == 7) tieC = val;
+        else if(_type == 8) tieD = val;
+    }
 
     // send tokens out inside this contract into any address. 
     // when the specified token is stake token, the minmum value should be equal or bigger than thresholdMinimum amount.
@@ -520,27 +537,27 @@ contract Lockup is Ownable {
         emit Withdraw(_msgSender(), name, amount);
     }
 
-    function unStakeAll() public {
-        for (uint256 i = 0; i < userInfoList[_msgSender()].length; i++) {
-            StakeInfo storage info = stakedUserList[userInfoList[_msgSender()][i]];
-            if(!isWithdrawable(info.name)) continue;
-            if(info.NFTStakingId == 0)
-                unStake(info.name);
-            else
-                unStakeNFT(info.name);
-        }
-    }
+    // function unStakeAll() public {
+    //     for (uint256 i = 0; i < userInfoList[_msgSender()].length; i++) {
+    //         StakeInfo storage info = stakedUserList[userInfoList[_msgSender()][i]];
+    //         if(!isWithdrawable(info.name)) continue;
+    //         if(info.NFTStakingId == 0)
+    //             unStake(info.name);
+    //         else
+    //             unStakeNFT(info.name);
+    //     }
+    // }
 
-    function getBoost(int128 duration, uint256 amount) internal pure returns (uint8) {
-        if (duration < 0 && amount < 500 * 10 ** 9 * 10 ** 18) return 8;      // irreversable
-        else if (duration < 0 && amount <= 1000 * 10 ** 9 * 10 ** 18) return 10;      // irreversable
-        else if (duration < 0 && amount <= 5000 * 10 ** 9 * 10 ** 18) return 12;      // irreversable
-        else if (duration < 0 && amount > 5000 * 10 ** 9 * 10 ** 18) return 14;      // irreversable
-        else if (duration < 30) return 1;   // no lock
-        else if (duration < 90) return 2;   // more than 1 month
-        else if (duration < 180) return 3;   // more than 3 month
-        else if (duration < 360) return 4;  // more than 6 month
-        else return 5;                      // more than 12 month
+    function getBoost(int128 duration, uint256 amount) internal view returns (uint8) {
+        if (duration < 0 && amount < 500 * 10 ** 9 * 10 ** 18) return tieA;      // irreversable
+        else if (duration < 0 && amount <= 1000 * 10 ** 9 * 10 ** 18) return tieB;      // irreversable
+        else if (duration < 0 && amount <= 5000 * 10 ** 9 * 10 ** 18) return tieC;      // irreversable
+        else if (duration < 0 && amount > 5000 * 10 ** 9 * 10 ** 18) return tieD;      // irreversable
+        else if (duration < 30) return unLockBoost;   // no lock
+        else if (duration < 90) return month1;   // more than 1 month
+        else if (duration < 180) return month3;   // more than 3 month
+        else if (duration < 360) return month6;  // more than 6 month
+        else return year1;                      // more than 12 month
     }
 
     function _dealWithIrreversibleAmount(uint256 amount, string memory name) private {
@@ -794,16 +811,6 @@ contract Lockup is Ownable {
     function getUserNFT(address user) public view returns(IERC721Metadata.NFTInfo[] memory NFTList, string[] memory uris) {
         return NFToken.getUserNFTInfo(user);
     }
-
-    // function getUserNFT(string[] memory nameList) public view returns(UserNFTInfo[] memory userInfo) {
-    //     for (uint256 i = 0; i < nameList.length; i++) {
-    //         require(isExistStakeId(nameList[i]), "not exist");
-    //         (IERC721Metadata.NFTInfo memory NFTList, string memory uri) = NFToken.getUserNFTInfoByTokenId(stakedUserList[_string2byte32(nameList[i])].NFTId);
-    //         userInfo[i].NFTList = NFTList;
-    //         userInfo[i].uri = uri;
-    //     }
-    //     return userInfo;
-    // }
 
     // 
     function getUserStakedNFT(string memory name) public view returns(uint256 tokenId, string memory uri) {
