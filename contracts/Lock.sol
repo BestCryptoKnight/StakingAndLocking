@@ -635,11 +635,11 @@ contract Lockup is Ownable {
 
         for (uint256 i = blockIndex + 1; i < blockList.length; i++) {
             uint256 _totalStaked = blockList[i].totalStaked;
-            lastClaimed = blockList[i].blockNumber;
             if(_totalStaked == 0) continue;
             reward = reward + ((blockList[i].blockNumber - lastClaimed).div(minInterval) 
                                 * (rewardPoolBalance * stakedAmount * boost / distributionPeriod  / _totalStaked / divisor )  // formula
                                 * (minInterval)  / (24 hours));
+            lastClaimed = blockList[i].blockNumber;
             
         }
 
@@ -722,9 +722,9 @@ contract Lockup is Ownable {
         stakedUserList[_string2byte32(name)].lastClaimed = time - (time - initialTime) % minInterval;
         stakedUserList[_string2byte32(name)].amount += reward;
         // lock period increases when compound except of irreversible mode
-        if(stakedUserList[_string2byte32(name)].duration >= 0) {
+        if(stakedUserList[_string2byte32(name)].duration > 0) {
             stakedUserList[_string2byte32(name)].duration++;
-        } else {        // when irreversible mode
+        } else if(stakedUserList[_string2byte32(name)].duration < 0) {        // when irreversible mode
             if(getBoost(stakedUserList[_string2byte32(name)].duration, stakedUserList[_string2byte32(name)].amount - reward) < getBoost(stakedUserList[_string2byte32(name)].duration, stakedUserList[_string2byte32(name)].amount)) {
                 uint256 oldId = stakedUserList[_string2byte32(name)].NFTId;
                 NFToken.burnToken(_msgSender(), (getBoost(stakedUserList[_string2byte32(name)].duration, stakedUserList[_string2byte32(name)].amount) - 8) / 2, stakedUserList[_string2byte32(name)].NFTId);
