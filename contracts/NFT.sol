@@ -1,3 +1,7 @@
+/**
+ *Submitted for verification at testnet.snowtrace.io on 2022-07-27
+*/
+
 // contracts/NFT.sol
 // SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity ^0.8.0;
@@ -473,10 +477,6 @@ contract GuarantNFT is ERC721URIStorage, Ownable {
     mapping(address=>uint256[]) public userInfoList;
 
     constructor() ERC721("Guarant NFT", "GIR") {
-        classUri[0] = "https://gateway.pinata.cloud/ipfs/QmaFxL15oSodfwnpJ5exy3sHN6zb6v8wiCxhdL99Lj75Ak";
-        classUri[1] = "https://gateway.pinata.cloud/ipfs/QmXZYdzV8tvwqcCoxaLbUWaGtpaFqZ5SMyLATb7gJQvNqW";
-        classUri[2] = "https://gateway.pinata.cloud/ipfs/QmZxJJaE52r81oWskh66tayeuzArtEeL3bC1Y9mtFKRmZd";
-        classUri[3] = "https://gateway.pinata.cloud/ipfs/QmQdK9a64aK7yuEnMuivHywmwS9EbSQT2o8TxNxwyPQFtP";
     }
     
     function createToken(address recipient, uint8 tie, uint256 amount) public onlyOwner returns (uint256) {
